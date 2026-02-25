@@ -1,4 +1,4 @@
-const APP_VERSION = "v1.2.0";
+const APP_VERSION = "v1.3.0";
 const CACHE_NAME = "estoque-rick-" + APP_VERSION;
 
 const FILES = [
@@ -39,3 +39,4 @@ self.addEventListener("fetch", event => {
       .catch(() => caches.match(event.request))
   );
 });
+
