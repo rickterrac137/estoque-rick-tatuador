@@ -11,26 +11,38 @@
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
 h1{text-align:center}
+
 .tabs{display:flex;gap:6px;margin-bottom:10px}
 .tabs button{flex:1;padding:10px;border:none;border-radius:8px;background:#ddd}
 .tabs button.active{background:#000;color:#fff}
+
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
-.item{display:flex;justify-content:space-between}
+
+.item{display:flex;justify-content:space-between;align-items:center}
 .controls button{width:auto;margin-left:4px}
+
 .zero{color:red;font-weight:bold}
 .low{color:#d35400;font-weight:bold}
 .hidden{display:none}
-#updateBar{display:none;background:#000;color:#fff;text-align:center;padding:6px;border-radius:6px}
+
+.footer{
+  text-align:center;
+  font-size:12px;
+  color:#666;
+  margin-top:20px;
+  padding:10px 0;
+}
+.footer span{display:block}
 </style>
 </head>
 
 <body>
 
-<div id="updateBar">🔄 Atualizando aplicativo…</div>
-
 <script>
+const APP_VERSION = "v1.6.0";
 let user = prompt("Digite seu nome:") || "Usuário";
+
 function now(){
   const d=new Date();
   return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR");
@@ -44,8 +56,9 @@ function now(){
   <button id="btnHistorico">📜 Histórico</button>
 </div>
 
-<!-- ESTOQUE -->
+<!-- ABA ESTOQUE -->
 <div id="estoqueTab">
+
   <div class="box">
     <select id="catSelect"></select>
     <input id="newCat" placeholder="Nova categoria">
@@ -53,13 +66,13 @@ function now(){
     <input id="newQty" type="number" placeholder="Quantidade">
     <button onclick="addProduct()">Adicionar</button>
   </div>
+
   <div id="stock"></div>
 </div>
 
-<!-- HISTÓRICO -->
+<!-- ABA HISTÓRICO -->
 <div id="historicoTab" class="hidden">
 
-  <!-- FILTRO POR DATA -->
   <div class="box">
     <h3>📅 Filtro por data</h3>
     <input type="date" id="dateStart">
@@ -67,7 +80,6 @@ function now(){
     <button onclick="renderHistory()">Aplicar filtro</button>
   </div>
 
-  <!-- RELATÓRIO MENSAL -->
   <div class="box">
     <h3>📊 Relatório mensal</h3>
     <input type="month" id="monthPick">
@@ -84,7 +96,12 @@ function now(){
     <h3>➖ Remoções</h3>
     <div id="histRem"></div>
   </div>
+</div>
 
+<!-- RODAPÉ COM VERSÃO -->
+<div class="footer">
+  <span>Versão do app: <b id="appVersion"></b></span>
+  <span>app oficial do denis costa</span>
 </div>
 
 <script type="module">
@@ -103,10 +120,14 @@ let data={}, history={adicoes:[],remocoes:[]};
 async function load(){
   const p=await getDoc(doc(db,"estoque","principal"));
   data=p.exists()?p.data().data||{}:{};
+
   const h=await getDoc(doc(db,"estoque","history"));
   if(h.exists()) history=h.data();
-  render();renderHistory();
+
+  render();
+  renderHistory();
 }
+
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
   await setDoc(doc(db,"estoque","history"),history);
@@ -114,30 +135,44 @@ async function save(){
 
 window.addProduct=async()=>{
   let c=newCat.value||catSelect.value;
-  if(!c||!newName.value)return;
-  if(!data[c])data[c]={};
+  if(!c||!newName.value) return alert("Preencha categoria e produto");
+
+  if(!data[c]) data[c]={};
   data[c][newName.value]=parseInt(newQty.value)||0;
+
   history.adicoes.unshift(`➕ ${newName.value} (${user}) — ${now()}`);
+
   newCat.value=newName.value=newQty.value="";
-  await save();render();
+  await save();
+  render();
 }
+
 window.changeQty=async(c,p,d)=>{
-  data[c][p]+=d;if(data[c][p]<0)data[c][p]=0;
+  data[c][p]+=d;
+  if(data[c][p]<0) data[c][p]=0;
+
   (d>0?history.adicoes:history.remocoes)
     .unshift(`${d>0?'➕':'➖'} ${p} (${user}) — ${now()}`);
-  await save();render();renderHistory();
+
+  await save();
+  render();
+  renderHistory();
 }
 
 window.render=()=>{
-  stock.innerHTML="";catSelect.innerHTML="";
+  stock.innerHTML="";
+  catSelect.innerHTML="";
+
   Object.keys(data).forEach(c=>{
     catSelect.innerHTML+=`<option>${c}</option>`;
-    let b=document.createElement("div");b.className="box";
-    b.innerHTML=`<h3>${c}</h3>`;
+    let box=document.createElement("div");
+    box.className="box";
+    box.innerHTML=`<h3>${c}</h3>`;
+
     Object.keys(data[c]).forEach(p=>{
       let q=data[c][p];
       let cls=q===0?"zero":q<=2?"low":"";
-      b.innerHTML+=`
+      box.innerHTML+=`
       <div class="item">
         <span class="${cls}">${p}: ${q}${q<=2?' ⚠️':''}</span>
         <span class="controls">
@@ -146,39 +181,55 @@ window.render=()=>{
         </span>
       </div>`;
     });
-    stock.appendChild(b);
+    stock.appendChild(box);
   });
 }
 
 window.renderHistory=()=>{
   const s=dateStart.value?new Date(dateStart.value):null;
   const e=dateEnd.value?new Date(dateEnd.value+"T23:59"):null;
+
   const filter=x=>{
     const d=new Date(x.split("—")[1]);
     return (!s||d>=s)&&(!e||d<=e);
-  }
+  };
+
   histAdd.innerHTML=history.adicoes.filter(filter).map(x=>`<div>${x}</div>`).join("");
   histRem.innerHTML=history.remocoes.filter(filter).map(x=>`<div>${x}</div>`).join("");
 }
 
 window.monthlyReport=()=>{
   const m=monthPick.value;
-  if(!m)return;
+  if(!m) return;
+
   let add=0,rem=0;
   [...history.adicoes,...history.remocoes].forEach(x=>{
     if(x.includes(m.split("-")[1]+"/"+m.split("-")[0])){
       x.includes("➕")?add++:rem++;
     }
   });
+
   report.innerHTML=`<b>Adições:</b> ${add}<br><b>Remoções:</b> ${rem}`;
 }
+
+document.getElementById("appVersion").innerText = APP_VERSION;
 
 load();
 </script>
 
 <script>
-btnEstoque.onclick=()=>{estoqueTab.classList.remove("hidden");historicoTab.classList.add("hidden")}
-btnHistorico.onclick=()=>{historicoTab.classList.remove("hidden");estoqueTab.classList.add("hidden")}
+btnEstoque.onclick=()=>{
+  btnEstoque.classList.add("active");
+  btnHistorico.classList.remove("active");
+  estoqueTab.classList.remove("hidden");
+  historicoTab.classList.add("hidden");
+}
+btnHistorico.onclick=()=>{
+  btnHistorico.classList.add("active");
+  btnEstoque.classList.remove("active");
+  historicoTab.classList.remove("hidden");
+  estoqueTab.classList.add("hidden");
+}
 </script>
 
 </body>
