@@ -11,41 +11,57 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <style>
-body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
-h1{text-align:center}
-.box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
-input,select,button{width:100%;padding:8px;margin:4px 0}
-button{font-size:16px}
+body{font-family:Arial;background:#f2f2f2;margin:0;padding:0}
+h1{text-align:center;margin:10px 0}
+#menu{display:flex;justify-content:space-around;background:#222;color:#fff;padding:10px;border-radius:0 0 10px 10px;}
+#menu button{background:#444;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:bold;}
+.page{padding:10px;display:none;}
+.page.active{display:block;}
+.box{background:#fff;padding:10px;margin-bottom:10px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+input,select,button{width:100%;padding:8px;margin:4px 0;border-radius:6px;border:1px solid #ccc;}
+button{font-size:16px;cursor:pointer;background:#333;color:#fff;}
+.card{background:#fff;padding:10px;margin:6px 0;border-radius:10px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}
 .item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
-.controls button{width:auto;margin-left:4px}
+.controls button{margin-left:4px;padding:4px 8px;border-radius:6px;}
 .zero{color:red;font-weight:bold}
 </style>
 </head>
 <body>
 
 <script>
-let user = prompt("Digite seu nome:"); // Apenas nome do usuário
+let user = prompt("Digite seu nome:");
 </script>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
 
-<div class="box">
-<input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
+<div id="menu">
+  <button onclick="showPage('estoque')">Estoque</button>
+  <button onclick="showPage('historico')">Histórico</button>
+  <button onclick="showPage('categorias')">Categorias</button>
 </div>
 
-<div class="box">
-<select id="catSelect"></select>
-<input id="newCat" placeholder="Ou nova categoria">
-<input id="newName" placeholder="Produto">
-<input id="newQty" type="number" placeholder="Quantidade">
-<button onclick="addProduct()">Adicionar</button>
+<div id="estoquePage" class="page active">
+  <div class="box">
+    <input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
+  </div>
+  <div id="stock"></div>
 </div>
 
-<div id="stock"></div>
+<div id="historicoPage" class="page">
+  <div class="box">
+    <h3>📜 Histórico</h3>
+    <div id="historyDiv"></div>
+  </div>
+</div>
 
-<div class="box">
-<h3>📜 Histórico</h3>
-<div id="historyDiv"></div>
+<div id="categoriasPage" class="page">
+  <div class="box">
+    <select id="catSelect"></select>
+    <input id="newCat" placeholder="Ou nova categoria">
+    <input id="newName" placeholder="Produto">
+    <input id="newQty" type="number" placeholder="Quantidade">
+    <button onclick="addProduct()">Adicionar</button>
+  </div>
 </div>
 
 <script type="module">
@@ -139,7 +155,7 @@ window.render = ()=>{
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
     let box=document.createElement("div");
-    box.className="box";
+    box.className="box card";
     box.innerHTML=`<h3>${cat} 
       <button onclick="editCategory('${cat}')">✏️</button>
       <button onclick="deleteCategory('${cat}')">🗑️</button>
@@ -157,9 +173,16 @@ window.render = ()=>{
         </span>
       </div>`;
     });
-    stock.appendChild(box);
+    document.getElementById('estoquePage').appendChild(box);
   });
   historyDiv.innerHTML = history.slice(0,20).map(h=>`<div>${h}</div>`).join("");
+}
+
+function showPage(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  if(page==='estoque') document.getElementById('estoquePage').classList.add('active');
+  if(page==='historico') document.getElementById('historicoPage').classList.add('active');
+  if(page==='categorias') document.getElementById('categoriasPage').classList.add('active');
 }
 
 load();
