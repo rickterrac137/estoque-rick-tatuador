@@ -7,15 +7,17 @@
 
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
-.item{display:flex;justify-content:space-between;align-items:center}
-.controls button{width:auto}
+.item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
+.controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
+h3 button{width:auto;margin-left:6px}
 </style>
 </head>
 
@@ -23,6 +25,7 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 
 <script>
 let user = prompt("Digite seu nome:");
+if(!user) user = "Usuário";
 </script>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
@@ -36,7 +39,7 @@ let user = prompt("Digite seu nome:");
 <input id="newCat" placeholder="Ou nova categoria">
 <input id="newName" placeholder="Produto">
 <input id="newQty" type="number" placeholder="Quantidade">
-<button onclick="addProduct()">Adicionar</button>
+<button onclick="addProduct()">Adicionar produto</button>
 </div>
 
 <div id="stock"></div>
@@ -92,7 +95,7 @@ async function save(){
 
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
-  if(!cat || !newName.value) return alert("Preencha tudo");
+  if(!cat || !newName.value) return alert("Preencha categoria e produto");
   if(!data[cat]) data[cat]={};
   data[cat][newName.value] = parseInt(newQty.value)||0;
   history.adicoes.unshift(`➕ ${newName.value} (${user})`);
@@ -108,29 +111,69 @@ window.changeQty = async (cat, prod, delta)=>{
   await save(); render();
 }
 
+window.editCategory = async (oldCat)=>{
+  let n = prompt("Novo nome da categoria:", oldCat);
+  if(n && n!==oldCat){
+    data[n] = data[oldCat];
+    delete data[oldCat];
+    await save(); render();
+  }
+}
+
+window.deleteCategory = async (cat)=>{
+  if(confirm("Excluir categoria e todos os produtos?")){
+    delete data[cat];
+    await save(); render();
+  }
+}
+
+window.editProduct = async (cat, prod)=>{
+  let n = prompt("Novo nome do produto:", prod);
+  if(n && n!==prod){
+    data[cat][n] = data[cat][prod];
+    delete data[cat][prod];
+    await save(); render();
+  }
+}
+
+window.deleteProduct = async (cat, prod)=>{
+  if(confirm("Excluir produto?")){
+    delete data[cat][prod];
+    await save(); render();
+  }
+}
+
 window.render = ()=>{
-  stock.innerHTML=""; catSelect.innerHTML="";
+  stock.innerHTML="";
+  catSelect.innerHTML="";
+
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
-    let b=document.createElement("div");
-    b.className="box";
-    b.innerHTML=`<h3>${cat}</h3>`;
-    Object.keys(data[cat]).forEach(p=>{
-      let q=data[cat][p];
-      b.innerHTML+=`
-      <div class="item">
-        <span class="${q===0?'zero':''}">${p}: ${q}</span>
-        <span class="controls">
-          <button onclick="changeQty('${cat}','${p}',-1)">−</button>
-          <button onclick="changeQty('${cat}','${p}',1)">+</button>
-        </span>
-      </div>`;
+    let box=document.createElement("div");
+    box.className="box";
+    box.innerHTML=`
+      <h3>${cat}
+        <button onclick="editCategory('${cat}')">✏️</button>
+        <button onclick="deleteCategory('${cat}')">🗑️</button>
+      </h3>`;
+    Object.keys(data[cat]).forEach(prod=>{
+      let qty=data[cat][prod];
+      box.innerHTML+=`
+        <div class="item">
+          <span class="${qty===0?'zero':''}">${prod}: ${qty}</span>
+          <span class="controls">
+            <button onclick="changeQty('${cat}','${prod}',-1)">−</button>
+            <button onclick="changeQty('${cat}','${prod}',1)">+</button>
+            <button onclick="editProduct('${cat}','${prod}')">✏️</button>
+            <button onclick="deleteProduct('${cat}','${prod}')">🗑️</button>
+          </span>
+        </div>`;
     });
-    stock.appendChild(b);
+    stock.appendChild(box);
   });
 
-  histAdd.innerHTML = history.adicoes.slice(0,15).map(x=>`<div>${x}</div>`).join("");
-  histRem.innerHTML = history.remocoes.slice(0,15).map(x=>`<div>${x}</div>`).join("");
+  histAdd.innerHTML = history.adicoes.slice(0,20).map(x=>`<div>${x}</div>`).join("");
+  histRem.innerHTML = history.remocoes.slice(0,20).map(x=>`<div>${x}</div>`).join("");
 }
 
 load();
