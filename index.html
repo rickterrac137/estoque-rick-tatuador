@@ -28,7 +28,7 @@ button{font-size:16px}
 <body>
 
 <script>
-const APP_VERSION = "v1.7.0";
+const APP_VERSION = "v1.7.1";
 let user = prompt("Digite seu nome:");
 </script>
 
@@ -39,6 +39,7 @@ let user = prompt("Digite seu nome:");
   <button onclick="showTab('historico')">📜 Histórico</button>
 </div>
 
+<!-- ABA ESTOQUE -->
 <div id="estoqueTab">
 
 <div class="box">
@@ -56,6 +57,7 @@ let user = prompt("Digite seu nome:");
 <div id="stock"></div>
 </div>
 
+<!-- ABA HISTÓRICO -->
 <div id="historicoTab" class="hidden">
 <div class="box">
 <h3>➕ Adições</h3>
@@ -84,8 +86,8 @@ font-weight:bold">
 </div>
 
 <div class="footer">
-<span>Versão do app: <b id="ver"></b></span>
-<span>app oficial do denis costa</span>
+<div>Versão do app: <b id="ver"></b></div>
+<div>app oficial do denis costa</div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -115,6 +117,7 @@ function showTab(tab){
 async function load(){
   const s = await db.collection("estoque").doc("principal").get();
   if(s.exists) data = s.data().data || {};
+
   const h = await db.collection("estoque").doc("history").get();
   if(h.exists){
     histAdd = h.data().add || [];
@@ -125,75 +128,100 @@ async function load(){
 
 async function save(){
   await db.collection("estoque").doc("principal").set({data});
-  await db.collection("estoque").doc("history").set({add:histAdd,rem:histRem});
+  await db.collection("estoque").doc("history").set({
+    add: histAdd,
+    rem: histRem
+  });
 }
 
 function addProduct(){
   let cat = newCat.value || catSelect.value;
-  if(!cat||!newName.value)return alert("Preencha tudo");
-  if(!data[cat])data[cat]={};
-  data[cat][newName.value]=parseInt(newQty.value)||0;
-  histAdd.unshift(`➕ ${newName.value} (${user}) ${new Date().toLocaleString()}`);
-  save();render();
+  if(!cat || !newName.value) return alert("Preencha tudo");
+  if(!data[cat]) data[cat] = {};
+  data[cat][newName.value] = parseInt(newQty.value) || 0;
+  histAdd.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
+  save(); render();
 }
 
 function changeQty(c,p,d){
-  data[c][p]+=d;
-  if(data[c][p]<0)data[c][p]=0;
-  (d>0?histAdd:histRem).unshift(`${d>0?"➕":"➖"} ${p} (${user}) ${new Date().toLocaleString()}`);
-  save();render();
+  data[c][p] += d;
+  if(data[c][p] < 0) data[c][p] = 0;
+  const msg = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
+  d>0 ? histAdd.unshift(msg) : histRem.unshift(msg);
+  save(); render();
 }
 
 function editCategory(c){
-  let n=prompt("Novo nome:",c);
-  if(n&&n!==c){data[n]=data[c];delete data[c];save();render();}
+  let n = prompt("Novo nome da categoria:", c);
+  if(n && n!==c){
+    data[n] = data[c];
+    delete data[c];
+    save(); render();
+  }
 }
+
 function deleteCategory(c){
-  if(confirm("Excluir categoria?")){delete data[c];save();render();}
+  if(confirm("Excluir categoria?")){
+    delete data[c];
+    save(); render();
+  }
 }
+
 function editProduct(c,p){
-  let n=prompt("Novo nome:",p);
-  if(n&&n!==p){data[c][n]=data[c][p];delete data[c][p];save();render();}
+  let n = prompt("Novo nome do produto:", p);
+  if(n && n!==p){
+    data[c][n] = data[c][p];
+    delete data[c][p];
+    save(); render();
+  }
 }
+
 function deleteProduct(c,p){
-  if(confirm("Excluir produto?")){delete data[c][p];save();render();}
+  if(confirm("Excluir produto?")){
+    delete data[c][p];
+    save(); render();
+  }
 }
 
 function render(){
-  stock.innerHTML="";catSelect.innerHTML="";
+  stock.innerHTML="";
+  catSelect.innerHTML="";
+
   for(let c in data){
     catSelect.innerHTML+=`<option>${c}</option>`;
-    let b=document.createElement("div");b.className="box";
-    b.innerHTML=`<h3>${c}
-    <button onclick="editCategory('${c}')">✏️</button>
-    <button onclick="deleteCategory('${c}')">🗑️</button></h3>`;
+    let box=document.createElement("div");
+    box.className="box";
+    box.innerHTML=`<h3>${c}
+      <button onclick="editCategory('${c}')">✏️</button>
+      <button onclick="deleteCategory('${c}')">🗑️</button>
+    </h3>`;
+
     for(let p in data[c]){
       let q=data[c][p];
-      b.innerHTML+=`<div class="item">
-      <span class="${q==0?"zero":q<=2?"low":""}">${p}: ${q}</span>
-      <span class="controls">
-      <button onclick="changeQty('${c}','${p}',-1)">−</button>
-      <button onclick="changeQty('${c}','${p}',1)">+</button>
-      <button onclick="editProduct('${c}','${p}')">✏️</button>
-      <button onclick="deleteProduct('${c}','${p}')">🗑️</button>
-      </span></div>`;
+      box.innerHTML+=`
+      <div class="item">
+        <span class="${q===0?'zero':q<=2?'low':''}">${p}: ${q}</span>
+        <span class="controls">
+          <button onclick="changeQty('${c}','${p}',-1)">−</button>
+          <button onclick="changeQty('${c}','${p}',1)">+</button>
+          <button onclick="editProduct('${c}','${p}')">✏️</button>
+          <button onclick="deleteProduct('${c}','${p}')">🗑️</button>
+        </span>
+      </div>`;
     }
-    stock.appendChild(b);
+    stock.appendChild(box);
   }
-  histAddDiv.innerHTML = histAdd.slice(0,20).join("<br>");
-  histRemDiv.innerHTML = histRem.slice(0,20).join("<br>");
+
+  document.getElementById("histAdd").innerHTML = histAdd.slice(0,30).join("<br>");
+  document.getElementById("histRem").innerHTML = histRem.slice(0,30).join("<br>");
 }
 
 load();
 </script>
 
 <script>
-if("serviceWorker"in navigator){
-navigator.serviceWorker.register("service-worker.js").then(reg=>{
-reg.addEventListener("updatefound",()=>{
-document.getElementById("updateBox").style.display="block";
-});
-});
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js");
 }
 </script>
 
