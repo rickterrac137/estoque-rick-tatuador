@@ -22,13 +22,12 @@ button{font-size:16px}
 <body>
 
 <script>
-let PIN = localStorage.getItem("pinRick");
-if(!PIN){
-  PIN = prompt("Crie um PIN de acesso:");
-  localStorage.setItem("pinRick", PIN);
+let pin = localStorage.getItem("pinRick");
+if(!pin){
+  pin = prompt("Crie um PIN:");
+  localStorage.setItem("pinRick", pin);
 }
-let attempt = prompt("Digite o PIN:");
-if(attempt !== PIN){
+if(prompt("Digite o PIN:") !== pin){
   alert("PIN incorreto");
   location.reload();
 }
@@ -53,7 +52,7 @@ let user = prompt("Seu nome:");
 
 <div class="box">
 <h3>📜 Histórico</h3>
-<div id="history"></div>
+<div id="historyDiv"></div>
 </div>
 
 <script type="module">
@@ -77,44 +76,55 @@ let history = [];
 
 async function load(){
   const snap = await getDoc(doc(db,"estoque","principal"));
-  if(snap.exists()) data = snap.data().data || {};
+  if(snap.exists()){
+    data = snap.data().data;
+  } else {
+    data = {};
+    await save();
+  }
+
   const h = await getDoc(doc(db,"estoque","history"));
-  if(h.exists()) history = h.data().list || [];
+  history = h.exists() ? h.data().list : [];
   render();
 }
+
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
   await setDoc(doc(db,"estoque","history"),{list:history});
 }
 
-window.addProduct=async()=>{
-  let cat=newCat.value||catSelect.value;
-  if(!data[cat])data[cat]={};
-  data[cat][newName.value]=parseInt(newQty.value)||0;
+window.addProduct = async ()=>{
+  let cat = newCat.value || catSelect.value;
+  if(!data[cat]) data[cat]={};
+  data[cat][newName.value] = parseInt(newQty.value)||0;
   history.unshift(`➕ ${newName.value} (${user})`);
   newCat.value=newName.value=newQty.value="";
-  await save();render();
+  await save(); render();
 }
 
-window.render=()=>{
-  stock.innerHTML="";catSelect.innerHTML="";
+window.render = ()=>{
+  stock.innerHTML="";
+  catSelect.innerHTML="";
   Object.keys(data).forEach(c=>{
     catSelect.innerHTML+=`<option>${c}</option>`;
-    let box=document.createElement("div");box.className="box";
+    let box=document.createElement("div");
+    box.className="box";
     box.innerHTML=`<h3>${c}</h3>`;
     Object.keys(data[c]).forEach(p=>{
       let z=data[c][p]==0?'zero':'';
       box.innerHTML+=`
       <div class="item">
-      <span class="${z}">${p}: ${data[c][p]}</span>
-      <span class="controls">
-      <button onclick="data['${c}']['${p}']--;history.unshift('➖ ${p} (${user})');save().then(render)">-</button>
-      <button onclick="data['${c}']['${p}']++;history.unshift('➕ ${p} (${user})');save().then(render)">+</button>
-      </span></div>`;
+        <span class="${z}">${p}: ${data[c][p]}</span>
+        <span class="controls">
+          <button onclick="data['${c}']['${p}']--;history.unshift('➖ ${p} (${user})');save().then(render)">-</button>
+          <button onclick="data['${c}']['${p}']++;history.unshift('➕ ${p} (${user})');save().then(render)">+</button>
+        </span>
+      </div>`;
     });
     stock.appendChild(box);
   });
-  historyDiv.innerHTML=history.slice(0,20).map(h=>`<div>${h}</div>`).join("");
+
+  historyDiv.innerHTML = history.slice(0,20).map(h=>`<div>${h}</div>`).join("");
 }
 
 load();
