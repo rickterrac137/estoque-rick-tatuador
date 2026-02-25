@@ -12,6 +12,25 @@
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
 h1{text-align:center}
+
+.tabs{
+  display:flex;
+  gap:6px;
+  margin-bottom:10px;
+}
+.tabs button{
+  flex:1;
+  padding:10px;
+  border:none;
+  border-radius:8px;
+  font-size:16px;
+  background:#ddd;
+}
+.tabs button.active{
+  background:#000;
+  color:#fff;
+}
+
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
 .item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
@@ -29,6 +48,7 @@ h3 button{width:auto;margin-left:6px}
   margin-bottom:8px;
   border-radius:6px;
 }
+.hidden{display:none}
 </style>
 </head>
 
@@ -39,7 +59,7 @@ h3 button{width:auto;margin-left:6px}
 <script>
 let user = prompt("Digite seu nome:");
 if(!user) user = "Usuário";
-const APP_VERSION = "v1.2.0";
+const APP_VERSION = "v1.3.0";
 
 function now(){
   const d = new Date();
@@ -49,28 +69,44 @@ function now(){
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
 
-<div class="box">
-<input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
+<!-- ABAS -->
+<div class="tabs">
+  <button id="tabEstoque" class="active" onclick="showTab('estoque')">📦 Estoque</button>
+  <button id="tabHistorico" onclick="showTab('historico')">📜 Histórico</button>
 </div>
 
-<div class="box">
-<select id="catSelect"></select>
-<input id="newCat" placeholder="Ou nova categoria">
-<input id="newName" placeholder="Produto">
-<input id="newQty" type="number" placeholder="Quantidade">
-<button onclick="addProduct()">Adicionar produto</button>
+<!-- ABA ESTOQUE -->
+<div id="estoqueTab">
+
+  <div class="box">
+    <input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
+  </div>
+
+  <div class="box">
+    <select id="catSelect"></select>
+    <input id="newCat" placeholder="Ou nova categoria">
+    <input id="newName" placeholder="Produto">
+    <input id="newQty" type="number" placeholder="Quantidade">
+    <button onclick="addProduct()">Adicionar produto</button>
+  </div>
+
+  <div id="stock"></div>
+
 </div>
 
-<div id="stock"></div>
+<!-- ABA HISTÓRICO -->
+<div id="historicoTab" class="hidden">
 
-<div class="box">
-<h3>📜 Histórico de Adições</h3>
-<div id="histAdd"></div>
-</div>
+  <div class="box">
+    <h3>📜 Histórico de Adições</h3>
+    <div id="histAdd"></div>
+  </div>
 
-<div class="box">
-<h3>📜 Histórico de Remoções</h3>
-<div id="histRem"></div>
+  <div class="box">
+    <h3>📜 Histórico de Remoções</h3>
+    <div id="histRem"></div>
+  </div>
+
 </div>
 
 <div class="footer">
@@ -197,21 +233,36 @@ window.render = ()=>{
     stock.appendChild(box);
   });
 
-  histAdd.innerHTML = history.adicoes.slice(0,20).map(x=>`<div>${x}</div>`).join("");
-  histRem.innerHTML = history.remocoes.slice(0,20).map(x=>`<div>${x}</div>`).join("");
+  histAdd.innerHTML = history.adicoes.slice(0,30).map(x=>`<div>${x}</div>`).join("");
+  histRem.innerHTML = history.remocoes.slice(0,30).map(x=>`<div>${x}</div>`).join("");
 }
 
 load();
 </script>
 
 <script>
+function showTab(tab){
+  estoqueTab.classList.add("hidden");
+  historicoTab.classList.add("hidden");
+  tabEstoque.classList.remove("active");
+  tabHistorico.classList.remove("active");
+
+  if(tab==="estoque"){
+    estoqueTab.classList.remove("hidden");
+    tabEstoque.classList.add("active");
+  }else{
+    historicoTab.classList.remove("hidden");
+    tabHistorico.classList.add("active");
+  }
+}
+
 if("serviceWorker" in navigator){
   navigator.serviceWorker.register("service-worker.js").then(reg=>{
     reg.onupdatefound = ()=>{
       const nw = reg.installing;
       nw.onstatechange = ()=>{
-        if(nw.state === "installed" && navigator.serviceWorker.controller){
-          document.getElementById("updateBar").style.display="block";
+        if(nw.state==="installed" && navigator.serviceWorker.controller){
+          updateBar.style.display="block";
           setTimeout(()=>location.reload(),1500);
         }
       };
