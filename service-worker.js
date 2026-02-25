@@ -1,4 +1,4 @@
-const APP_VERSION = "v1.1.0";
+const APP_VERSION = "v1.2.0";
 const CACHE_NAME = "estoque-rick-" + APP_VERSION;
 
 const FILES = [
@@ -19,9 +19,7 @@ self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys.map(k => {
-          if (k !== CACHE_NAME) return caches.delete(k);
-        })
+        keys.map(k => k !== CACHE_NAME && caches.delete(k))
       )
     )
   );
