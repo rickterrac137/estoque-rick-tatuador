@@ -22,22 +22,21 @@ h1{text-align:center}
 
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
+
 .item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
 .controls button{width:auto;margin-left:4px}
+
 .zero{color:red;font-weight:bold}
+.low{color:#d35400;font-weight:bold}
+
 .footer{text-align:center;font-size:12px;color:#666;margin-top:10px}
 h3 button{width:auto;margin-left:6px}
 
 .hidden{display:none}
 
 #updateBar{
-  display:none;
-  background:#000;
-  color:#fff;
-  text-align:center;
-  padding:6px;
-  margin-bottom:8px;
-  border-radius:6px;
+  display:none;background:#000;color:#fff;
+  text-align:center;padding:6px;margin-bottom:8px;border-radius:6px
 }
 </style>
 </head>
@@ -47,7 +46,7 @@ h3 button{width:auto;margin-left:6px}
 <div id="updateBar">🔄 Atualizando aplicativo…</div>
 
 <script>
-const APP_VERSION = "v1.3.1";
+const APP_VERSION = "v1.4.0";
 let user = prompt("Digite seu nome:");
 if(!user) user = "Usuário";
 
@@ -64,6 +63,7 @@ function now(){
   <button id="btnHistorico">📜 Histórico</button>
 </div>
 
+<!-- ABA ESTOQUE -->
 <div id="estoqueTab">
 
   <div class="box">
@@ -81,15 +81,23 @@ function now(){
   <div id="stock"></div>
 </div>
 
+<!-- ABA HISTÓRICO -->
 <div id="historicoTab" class="hidden">
+
   <div class="box">
     <h3>📜 Histórico de Adições</h3>
     <div id="histAdd"></div>
   </div>
+
   <div class="box">
     <h3>📜 Histórico de Remoções</h3>
     <div id="histRem"></div>
   </div>
+
+  <div class="box">
+    <button onclick="clearHistory()">🗑️ Limpar histórico (admin)</button>
+  </div>
+
 </div>
 
 <div class="footer">
@@ -154,18 +162,29 @@ window.changeQty = async (c,p,d)=>{
 }
 
 window.editCategory=async o=>{
-  let n=prompt("Novo nome:",o);
+  let n=prompt("Novo nome da categoria:",o);
   if(n&&n!==o){data[n]=data[o];delete data[o];await save();render();}
 }
 window.deleteCategory=async c=>{
   if(confirm("Excluir categoria?")){delete data[c];await save();render();}
 }
 window.editProduct=async(c,p)=>{
-  let n=prompt("Novo nome:",p);
+  let n=prompt("Novo nome do produto:",p);
   if(n&&n!==p){data[c][n]=data[c][p];delete data[c][p];await save();render();}
 }
 window.deleteProduct=async(c,p)=>{
   if(confirm("Excluir produto?")){delete data[c][p];await save();render();}
+}
+
+window.clearHistory = async ()=>{
+  const senha = prompt("Senha de administrador:");
+  if(senha !== "556621") return alert("Senha incorreta");
+  if(confirm("Tem certeza que deseja apagar TODO o histórico?")){
+    history.adicoes = [];
+    history.remocoes = [];
+    await save();
+    render();
+  }
 }
 
 window.render=()=>{
@@ -179,9 +198,11 @@ window.render=()=>{
       <button onclick="deleteCategory('${cat}')">🗑️</button></h3>`;
     Object.keys(data[cat]).forEach(p=>{
       let q=data[cat][p];
+      let cls = q===0?"zero":q<=2?"low":"";
+      let warn = q<=2 ? " ⚠️ estoque baixo" : "";
       box.innerHTML+=`
       <div class="item">
-        <span class="${q===0?'zero':''}">${p}: ${q}</span>
+        <span class="${cls}">${p}: ${q}${warn}</span>
         <span class="controls">
           <button onclick="changeQty('${cat}','${p}',-1)">−</button>
           <button onclick="changeQty('${cat}','${p}',1)">+</button>
@@ -200,10 +221,8 @@ load();
 </script>
 
 <script>
-const btnE=document.getElementById("btnEstoque");
-const btnH=document.getElementById("btnHistorico");
-btnE.onclick=()=>{estoqueTab.classList.remove("hidden");historicoTab.classList.add("hidden");btnE.classList.add("active");btnH.classList.remove("active");}
-btnH.onclick=()=>{historicoTab.classList.remove("hidden");estoqueTab.classList.add("hidden");btnH.classList.add("active");btnE.classList.remove("active");}
+btnEstoque.onclick=()=>{estoqueTab.classList.remove("hidden");historicoTab.classList.add("hidden");btnEstoque.classList.add("active");btnHistorico.classList.remove("active")}
+btnHistorico.onclick=()=>{historicoTab.classList.remove("hidden");estoqueTab.classList.add("hidden");btnHistorico.classList.add("active");btnEstoque.classList.remove("active")}
 
 if("serviceWorker"in navigator){
   navigator.serviceWorker.register("service-worker.js").then(r=>{
