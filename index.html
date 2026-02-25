@@ -5,10 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
 
-<!-- Manifest para PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
@@ -24,13 +22,13 @@ button{font-size:16px}
 <body>
 
 <script>
-let user = prompt("Digite seu nome:"); // Apenas nome do usuário
+let user = prompt("Digite seu nome:");
 </script>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
 
 <div class="box">
-<input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
+<input placeholder="🔍 Pesquisar produto">
 </div>
 
 <div class="box">
@@ -42,6 +40,19 @@ let user = prompt("Digite seu nome:"); // Apenas nome do usuário
 </div>
 
 <div id="stock"></div>
+
+<!-- CONTROLES DO HISTÓRICO -->
+<div class="box">
+<button onclick="mostrarHistorico('todos')">📜 Todos</button>
+<button onclick="mostrarHistorico('adicoes')">➕ Adições</button>
+<button onclick="mostrarHistorico('remocoes')">➖ Remoções</button>
+</div>
+
+<div class="box">
+<label>Limpar histórico até a data:</label>
+<input type="date" id="dataLimite">
+<button onclick="limparHistoricoPorData()">🧹 Limpar Histórico</button>
+</div>
 
 <div class="box">
 <h3>📜 Histórico</h3>
@@ -65,27 +76,41 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let data = {};
-let history = [];
+let history = { adicoes: [], remocoes: [] };
+let tipoHistoricoAtual = "todos";
 
 async function load(){
   const snap = await getDoc(doc(db,"estoque","principal"));
   if(snap.exists()) data = snap.data().data || {};
+
   const h = await getDoc(doc(db,"estoque","history"));
-  history = h.exists() ? h.data().list : [];
+  if(h.exists()) history = h.data();
+
   render();
 }
 
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
-  await setDoc(doc(db,"estoque","history"),{list:history});
+  await setDoc(doc(db,"estoque","history"),history);
+}
+
+function registrarHistorico(tipo, cat, prod, qtd){
+  const r = {
+    categoria: cat,
+    produto: prod,
+    quantidade: qtd,
+    usuario: user,
+    data: new Date().toISOString()
+  };
+  tipo === "adicao" ? history.adicoes.unshift(r) : history.remocoes.unshift(r);
 }
 
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha categoria e produto");
-  if(!data[cat]) data[cat]={};
+  if(!data[cat]) data[cat] = {};
   data[cat][newName.value] = parseInt(newQty.value)||0;
-  history.unshift(`➕ ${newName.value} (${user})`);
+  registrarHistorico("adicao", cat, newName.value, parseInt(newQty.value)||0);
   newCat.value=newName.value=newQty.value="";
   await save(); render();
 }
@@ -93,44 +118,10 @@ window.addProduct = async ()=>{
 window.changeQty = async (cat, prod, delta)=>{
   data[cat][prod] += delta;
   if(data[cat][prod] < 0) data[cat][prod] = 0;
-  history.unshift(`${delta>0?'➕':'➖'} ${prod} (${user})`);
+  delta > 0
+    ? registrarHistorico("adicao", cat, prod, delta)
+    : registrarHistorico("remocao", cat, prod, Math.abs(delta));
   await save(); render();
-}
-
-window.editCategory = async (oldCat)=>{
-  let newName = prompt("Novo nome da categoria:", oldCat);
-  if(newName && newName !== oldCat){
-    data[newName] = data[oldCat];
-    delete data[oldCat];
-    history.unshift(`✏️ Categoria "${oldCat}" renomeada para "${newName}" (${user})`);
-    await save(); render();
-  }
-}
-
-window.deleteCategory = async (cat)=>{
-  if(confirm(`Tem certeza que deseja excluir a categoria "${cat}" e todos os produtos?`)){
-    delete data[cat];
-    history.unshift(`🗑️ Categoria "${cat}" excluída (${user})`);
-    await save(); render();
-  }
-}
-
-window.editProduct = async (cat, prod)=>{
-  let newName = prompt("Novo nome do produto:", prod);
-  if(newName && newName !== prod){
-    data[cat][newName] = data[cat][prod];
-    delete data[cat][prod];
-    history.unshift(`✏️ Produto "${prod}" renomeado para "${newName}" (${user})`);
-    await save(); render();
-  }
-}
-
-window.deleteProduct = async (cat, prod)=>{
-  if(confirm(`Tem certeza que deseja excluir o produto "${prod}"?`)){
-    delete data[cat][prod];
-    history.unshift(`🗑️ Produto "${prod}" excluído (${user})`);
-    await save(); render();
-  }
 }
 
 window.render = ()=>{
@@ -140,10 +131,7 @@ window.render = ()=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
     let box=document.createElement("div");
     box.className="box";
-    box.innerHTML=`<h3>${cat} 
-      <button onclick="editCategory('${cat}')">✏️</button>
-      <button onclick="deleteCategory('${cat}')">🗑️</button>
-    </h3>`;
+    box.innerHTML=`<h3>${cat}</h3>`;
     Object.keys(data[cat]).forEach(prod=>{
       let qty=data[cat][prod];
       box.innerHTML+=`
@@ -152,14 +140,43 @@ window.render = ()=>{
         <span class="controls">
           <button onclick="changeQty('${cat}','${prod}',-1)">−</button>
           <button onclick="changeQty('${cat}','${prod}',1)">+</button>
-          <button onclick="editProduct('${cat}','${prod}')">✏️</button>
-          <button onclick="deleteProduct('${cat}','${prod}')">🗑️</button>
         </span>
       </div>`;
     });
     stock.appendChild(box);
   });
-  historyDiv.innerHTML = history.slice(0,20).map(h=>`<div>${h}</div>`).join("");
+  renderHistorico();
+}
+
+window.mostrarHistorico = tipo=>{
+  tipoHistoricoAtual = tipo;
+  renderHistorico();
+}
+
+function renderHistorico(){
+  let html="";
+  if(tipoHistoricoAtual==="todos"||tipoHistoricoAtual==="adicoes"){
+    html+="<h4>➕ Adições</h4>";
+    html+=history.adicoes.slice(0,20).map(h=>
+      `<div>➕ ${h.produto} (${h.quantidade}) - ${h.usuario} - ${new Date(h.data).toLocaleString()}</div>`
+    ).join("");
+  }
+  if(tipoHistoricoAtual==="todos"||tipoHistoricoAtual==="remocoes"){
+    html+="<hr><h4>➖ Remoções</h4>";
+    html+=history.remocoes.slice(0,20).map(h=>
+      `<div>➖ ${h.produto} (${h.quantidade}) - ${h.usuario} - ${new Date(h.data).toLocaleString()}</div>`
+    ).join("");
+  }
+  historyDiv.innerHTML=html;
+}
+
+window.limparHistoricoPorData = async ()=>{
+  const d = document.getElementById("dataLimite").value;
+  if(!d) return alert("Selecione uma data");
+  const limite = new Date(d);
+  history.adicoes = history.adicoes.filter(h=>new Date(h.data)>limite);
+  history.remocoes = history.remocoes.filter(h=>new Date(h.data)>limite);
+  await save(); renderHistorico();
 }
 
 load();
