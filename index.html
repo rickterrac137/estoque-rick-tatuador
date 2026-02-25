@@ -23,6 +23,7 @@ button{font-size:16px}
 
 <script>
 let user = prompt("Digite seu nome:");
+if(!user) user = "Usuário";
 </script>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
@@ -41,7 +42,6 @@ let user = prompt("Digite seu nome:");
 
 <div id="stock"></div>
 
-<!-- CONTROLES DO HISTÓRICO -->
 <div class="box">
 <button onclick="mostrarHistorico('todos')">📜 Todos</button>
 <button onclick="mostrarHistorico('adicoes')">➕ Adições</button>
@@ -84,29 +84,40 @@ async function load(){
   if(snap.exists()) data = snap.data().data || {};
 
   const h = await getDoc(doc(db,"estoque","history"));
-  if(h.exists()) history = h.data();
-
+  if(h.exists()){
+    history = {
+      adicoes: h.data().adicoes || [],
+      remocoes: h.data().remocoes || []
+    };
+  } else {
+    history = { adicoes: [], remocoes: [] };
+  }
   render();
 }
 
 async function save(){
-  await setDoc(doc(db,"estoque","principal"),{data});
-  await setDoc(doc(db,"estoque","history"),history);
+  await setDoc(doc(db,"estoque","principal"), { data });
+  await setDoc(doc(db,"estoque","history"), {
+    adicoes: history.adicoes || [],
+    remocoes: history.remocoes || []
+  });
 }
 
 function registrarHistorico(tipo, cat, prod, qtd){
-  const r = {
+  const registro = {
     categoria: cat,
     produto: prod,
     quantidade: qtd,
     usuario: user,
     data: new Date().toISOString()
   };
-  tipo === "adicao" ? history.adicoes.unshift(r) : history.remocoes.unshift(r);
+  tipo === "adicao"
+    ? history.adicoes.unshift(registro)
+    : history.remocoes.unshift(registro);
 }
 
 window.addProduct = async ()=>{
-  let cat = newCat.value || catSelect.value;
+  const cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha categoria e produto");
   if(!data[cat]) data[cat] = {};
   data[cat][newName.value] = parseInt(newQty.value)||0;
@@ -133,7 +144,7 @@ window.render = ()=>{
     box.className="box";
     box.innerHTML=`<h3>${cat}</h3>`;
     Object.keys(data[cat]).forEach(prod=>{
-      let qty=data[cat][prod];
+      const qty=data[cat][prod];
       box.innerHTML+=`
       <div class="item">
         <span class="${qty===0?'zero':''}">${prod}: ${qty}</span>
@@ -167,7 +178,7 @@ function renderHistorico(){
       `<div>➖ ${h.produto} (${h.quantidade}) - ${h.usuario} - ${new Date(h.data).toLocaleString()}</div>`
     ).join("");
   }
-  historyDiv.innerHTML=html;
+  historyDiv.innerHTML=html || "<div>Nenhum histórico ainda.</div>";
 }
 
 window.limparHistoricoPorData = async ()=>{
