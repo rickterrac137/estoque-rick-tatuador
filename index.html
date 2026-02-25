@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
+
+<link rel="manifest" href="manifest.json">
+
+<style>
+body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
+h1{text-align:center}
+.box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
+input,select,button{width:100%;padding:8px;margin:4px 0}
+button{font-size:16px}
+.item{display:flex;justify-content:space-between;align-items:center}
+.controls button{width:auto}
+.zero{color:red;font-weight:bold}
+</style>
+</head>
+
+<body>
+
+<script>
+let PIN = localStorage.getItem("pinRick");
+if(!PIN){
+  PIN = prompt("Crie um PIN de acesso:");
+  localStorage.setItem("pinRick", PIN);
+}
+let attempt = prompt("Digite o PIN:");
+if(attempt !== PIN){
+  alert("PIN incorreto");
+  location.reload();
+}
+let user = prompt("Seu nome:");
+</script>
+
+<h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
+
+<div class="box">
+<input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
+</div>
+
+<div class="box">
+<select id="catSelect"></select>
+<input id="newCat" placeholder="Ou nova categoria">
+<input id="newName" placeholder="Produto">
+<input id="newQty" type="number" placeholder="Quantidade">
+<button onclick="addProduct()">Adicionar</button>
+</div>
+
+<div id="stock"></div>
+
+<div class="box">
+<h3>📜 Histórico</h3>
+<div id="history"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
+  authDomain: "estoque-rick-tatuador.firebaseapp.com",
+  projectId: "estoque-rick-tatuador",
+  storageBucket: "estoque-rick-tatuador.firebasestorage.app",
+  messagingSenderId: "446550868475",
+  appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let data = {};
+let history = [];
+
+async function load(){
+  const snap = await getDoc(doc(db,"estoque","principal"));
+  if(snap.exists()) data = snap.data().data || {};
+  const h = await getDoc(doc(db,"estoque","history"));
+  if(h.exists()) history = h.data().list || [];
+  render();
+}
+async function save(){
+  await setDoc(doc(db,"estoque","principal"),{data});
+  await setDoc(doc(db,"estoque","history"),{list:history});
+}
+
+window.addProduct=async()=>{
+  let cat=newCat.value||catSelect.value;
+  if(!data[cat])data[cat]={};
+  data[cat][newName.value]=parseInt(newQty.value)||0;
+  history.unshift(`➕ ${newName.value} (${user})`);
+  newCat.value=newName.value=newQty.value="";
+  await save();render();
+}
+
+window.render=()=>{
+  stock.innerHTML="";catSelect.innerHTML="";
+  Object.keys(data).forEach(c=>{
+    catSelect.innerHTML+=`<option>${c}</option>`;
+    let box=document.createElement("div");box.className="box";
+    box.innerHTML=`<h3>${c}</h3>`;
+    Object.keys(data[c]).forEach(p=>{
+      let z=data[c][p]==0?'zero':'';
+      box.innerHTML+=`
+      <div class="item">
+      <span class="${z}">${p}: ${data[c][p]}</span>
+      <span class="controls">
+      <button onclick="data['${c}']['${p}']--;history.unshift('➖ ${p} (${user})');save().then(render)">-</button>
+      <button onclick="data['${c}']['${p}']++;history.unshift('➕ ${p} (${user})');save().then(render)">+</button>
+      </span></div>`;
+    });
+    stock.appendChild(box);
+  });
+  historyDiv.innerHTML=history.slice(0,20).map(h=>`<div>${h}</div>`).join("");
+}
+
+load();
+</script>
+
+<script>
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+
+</body>
+</html>
