@@ -13,23 +13,22 @@ body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
-button{font-size:16px}
-.item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
-.controls button{width:auto;margin-left:4px}
+.item{display:flex;justify-content:space-between;align-items:center}
+.controls button{width:auto}
 .zero{color:red;font-weight:bold}
 </style>
 </head>
+
 <body>
 
 <script>
 let user = prompt("Digite seu nome:");
-if(!user) user = "Usuário";
 </script>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
 
 <div class="box">
-<input placeholder="🔍 Pesquisar produto">
+<input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
 </div>
 
 <div class="box">
@@ -43,20 +42,13 @@ if(!user) user = "Usuário";
 <div id="stock"></div>
 
 <div class="box">
-<button onclick="mostrarHistorico('todos')">📜 Todos</button>
-<button onclick="mostrarHistorico('adicoes')">➕ Adições</button>
-<button onclick="mostrarHistorico('remocoes')">➖ Remoções</button>
+<h3>📜 Histórico de Adições</h3>
+<div id="histAdd"></div>
 </div>
 
 <div class="box">
-<label>Limpar histórico até a data:</label>
-<input type="date" id="dataLimite">
-<button onclick="limparHistoricoPorData()">🧹 Limpar Histórico</button>
-</div>
-
-<div class="box">
-<h3>📜 Histórico</h3>
-<div id="historyDiv"></div>
+<h3>📜 Histórico de Remoções</h3>
+<div id="histRem"></div>
 </div>
 
 <script type="module">
@@ -77,51 +69,33 @@ const db = getFirestore(app);
 
 let data = {};
 let history = { adicoes: [], remocoes: [] };
-let tipoHistoricoAtual = "todos";
 
 async function load(){
-  const snap = await getDoc(doc(db,"estoque","principal"));
-  if(snap.exists()) data = snap.data().data || {};
+  const p = await getDoc(doc(db,"estoque","principal"));
+  data = p.exists() && p.data().data ? p.data().data : {};
 
   const h = await getDoc(doc(db,"estoque","history"));
   if(h.exists()){
-    history = {
-      adicoes: h.data().adicoes || [],
-      remocoes: h.data().remocoes || []
-    };
-  } else {
-    history = { adicoes: [], remocoes: [] };
+    const d = h.data();
+    history.adicoes = Array.isArray(d.adicoes) ? d.adicoes : [];
+    history.remocoes = Array.isArray(d.remocoes) ? d.remocoes : [];
   }
+
+  await save();
   render();
 }
 
 async function save(){
-  await setDoc(doc(db,"estoque","principal"), { data });
-  await setDoc(doc(db,"estoque","history"), {
-    adicoes: history.adicoes || [],
-    remocoes: history.remocoes || []
-  });
-}
-
-function registrarHistorico(tipo, cat, prod, qtd){
-  const registro = {
-    categoria: cat,
-    produto: prod,
-    quantidade: qtd,
-    usuario: user,
-    data: new Date().toISOString()
-  };
-  tipo === "adicao"
-    ? history.adicoes.unshift(registro)
-    : history.remocoes.unshift(registro);
+  await setDoc(doc(db,"estoque","principal"),{data});
+  await setDoc(doc(db,"estoque","history"),history);
 }
 
 window.addProduct = async ()=>{
-  const cat = newCat.value || catSelect.value;
-  if(!cat || !newName.value) return alert("Preencha categoria e produto");
-  if(!data[cat]) data[cat] = {};
+  let cat = newCat.value || catSelect.value;
+  if(!cat || !newName.value) return alert("Preencha tudo");
+  if(!data[cat]) data[cat]={};
   data[cat][newName.value] = parseInt(newQty.value)||0;
-  registrarHistorico("adicao", cat, newName.value, parseInt(newQty.value)||0);
+  history.adicoes.unshift(`➕ ${newName.value} (${user})`);
   newCat.value=newName.value=newQty.value="";
   await save(); render();
 }
@@ -129,65 +103,34 @@ window.addProduct = async ()=>{
 window.changeQty = async (cat, prod, delta)=>{
   data[cat][prod] += delta;
   if(data[cat][prod] < 0) data[cat][prod] = 0;
-  delta > 0
-    ? registrarHistorico("adicao", cat, prod, delta)
-    : registrarHistorico("remocao", cat, prod, Math.abs(delta));
+  (delta>0?history.adicoes:history.remocoes)
+    .unshift(`${delta>0?'➕':'➖'} ${prod} (${user})`);
   await save(); render();
 }
 
 window.render = ()=>{
-  stock.innerHTML="";
-  catSelect.innerHTML="";
+  stock.innerHTML=""; catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
-    let box=document.createElement("div");
-    box.className="box";
-    box.innerHTML=`<h3>${cat}</h3>`;
-    Object.keys(data[cat]).forEach(prod=>{
-      const qty=data[cat][prod];
-      box.innerHTML+=`
+    let b=document.createElement("div");
+    b.className="box";
+    b.innerHTML=`<h3>${cat}</h3>`;
+    Object.keys(data[cat]).forEach(p=>{
+      let q=data[cat][p];
+      b.innerHTML+=`
       <div class="item">
-        <span class="${qty===0?'zero':''}">${prod}: ${qty}</span>
+        <span class="${q===0?'zero':''}">${p}: ${q}</span>
         <span class="controls">
-          <button onclick="changeQty('${cat}','${prod}',-1)">−</button>
-          <button onclick="changeQty('${cat}','${prod}',1)">+</button>
+          <button onclick="changeQty('${cat}','${p}',-1)">−</button>
+          <button onclick="changeQty('${cat}','${p}',1)">+</button>
         </span>
       </div>`;
     });
-    stock.appendChild(box);
+    stock.appendChild(b);
   });
-  renderHistorico();
-}
 
-window.mostrarHistorico = tipo=>{
-  tipoHistoricoAtual = tipo;
-  renderHistorico();
-}
-
-function renderHistorico(){
-  let html="";
-  if(tipoHistoricoAtual==="todos"||tipoHistoricoAtual==="adicoes"){
-    html+="<h4>➕ Adições</h4>";
-    html+=history.adicoes.slice(0,20).map(h=>
-      `<div>➕ ${h.produto} (${h.quantidade}) - ${h.usuario} - ${new Date(h.data).toLocaleString()}</div>`
-    ).join("");
-  }
-  if(tipoHistoricoAtual==="todos"||tipoHistoricoAtual==="remocoes"){
-    html+="<hr><h4>➖ Remoções</h4>";
-    html+=history.remocoes.slice(0,20).map(h=>
-      `<div>➖ ${h.produto} (${h.quantidade}) - ${h.usuario} - ${new Date(h.data).toLocaleString()}</div>`
-    ).join("");
-  }
-  historyDiv.innerHTML=html || "<div>Nenhum histórico ainda.</div>";
-}
-
-window.limparHistoricoPorData = async ()=>{
-  const d = document.getElementById("dataLimite").value;
-  if(!d) return alert("Selecione uma data");
-  const limite = new Date(d);
-  history.adicoes = history.adicoes.filter(h=>new Date(h.data)>limite);
-  history.remocoes = history.remocoes.filter(h=>new Date(h.data)>limite);
-  await save(); renderHistorico();
+  histAdd.innerHTML = history.adicoes.slice(0,15).map(x=>`<div>${x}</div>`).join("");
+  histRem.innerHTML = history.remocoes.slice(0,15).map(x=>`<div>${x}</div>`).join("");
 }
 
 load();
