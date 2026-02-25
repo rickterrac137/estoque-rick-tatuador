@@ -23,7 +23,6 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .controls button{width:auto;margin-left:4px}
 
 .zero{color:red;font-weight:bold}
-.low{color:#d35400;font-weight:bold}
 .hidden{display:none}
 
 .footer{
@@ -31,16 +30,14 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
   font-size:12px;
   color:#666;
   margin-top:20px;
-  padding:10px 0;
 }
-.footer span{display:block}
 </style>
 </head>
 
 <body>
 
 <script>
-const APP_VERSION = "v1.6.0";
+const APP_VERSION = "v1.6.1";
 let user = prompt("Digite seu nome:") || "Usuário";
 
 function now(){
@@ -56,7 +53,6 @@ function now(){
   <button id="btnHistorico">📜 Histórico</button>
 </div>
 
-<!-- ABA ESTOQUE -->
 <div id="estoqueTab">
 
   <div class="box">
@@ -70,166 +66,112 @@ function now(){
   <div id="stock"></div>
 </div>
 
-<!-- ABA HISTÓRICO -->
 <div id="historicoTab" class="hidden">
-
   <div class="box">
-    <h3>📅 Filtro por data</h3>
-    <input type="date" id="dateStart">
-    <input type="date" id="dateEnd">
-    <button onclick="renderHistory()">Aplicar filtro</button>
-  </div>
-
-  <div class="box">
-    <h3>📊 Relatório mensal</h3>
-    <input type="month" id="monthPick">
-    <button onclick="monthlyReport()">Gerar relatório</button>
-    <div id="report"></div>
-  </div>
-
-  <div class="box">
-    <h3>➕ Adições</h3>
-    <div id="histAdd"></div>
-  </div>
-
-  <div class="box">
-    <h3>➖ Remoções</h3>
-    <div id="histRem"></div>
+    <h3>📜 Histórico</h3>
+    <div id="historyDiv"></div>
   </div>
 </div>
 
-<!-- RODAPÉ COM VERSÃO -->
 <div class="footer">
-  <span>Versão do app: <b id="appVersion"></b></span>
-  <span>app oficial do denis costa</span>
+  <div>Versão do app: <b id="ver"></b></div>
+  <div>app oficial do denis costa</div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<!-- Firebase compat (estável para iPhone) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-const app = initializeApp({
+<script>
+firebase.initializeApp({
   apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
   authDomain: "estoque-rick-tatuador.firebaseapp.com",
   projectId: "estoque-rick-tatuador"
 });
-const db = getFirestore(app);
 
-let data={}, history={adicoes:[],remocoes:[]};
+const db = firebase.firestore();
+let data = {};
+let history = [];
 
 async function load(){
-  const p=await getDoc(doc(db,"estoque","principal"));
-  data=p.exists()?p.data().data||{}:{};
+  const p = await db.doc("estoque/principal").get();
+  if(p.exists) data = p.data().data || {};
 
-  const h=await getDoc(doc(db,"estoque","history"));
-  if(h.exists()) history=h.data();
+  const h = await db.doc("estoque/history").get();
+  if(h.exists) history = h.data().list || [];
 
   render();
-  renderHistory();
 }
 
 async function save(){
-  await setDoc(doc(db,"estoque","principal"),{data});
-  await setDoc(doc(db,"estoque","history"),history);
+  await db.doc("estoque/principal").set({data});
+  await db.doc("estoque/history").set({list:history});
 }
 
-window.addProduct=async()=>{
-  let c=newCat.value||catSelect.value;
-  if(!c||!newName.value) return alert("Preencha categoria e produto");
+function addProduct(){
+  let c = newCat.value || catSelect.value;
+  if(!c || !newName.value) return alert("Preencha categoria e produto");
 
-  if(!data[c]) data[c]={};
-  data[c][newName.value]=parseInt(newQty.value)||0;
+  if(!data[c]) data[c] = {};
+  data[c][newName.value] = parseInt(newQty.value) || 0;
 
-  history.adicoes.unshift(`➕ ${newName.value} (${user}) — ${now()}`);
+  history.unshift(`➕ ${newName.value} (${user}) — ${now()}`);
 
-  newCat.value=newName.value=newQty.value="";
-  await save();
-  render();
+  newCat.value = newName.value = newQty.value = "";
+  save(); render();
 }
 
-window.changeQty=async(c,p,d)=>{
-  data[c][p]+=d;
-  if(data[c][p]<0) data[c][p]=0;
+function changeQty(c,p,d){
+  data[c][p] += d;
+  if(data[c][p] < 0) data[c][p] = 0;
 
-  (d>0?history.adicoes:history.remocoes)
-    .unshift(`${d>0?'➕':'➖'} ${p} (${user}) — ${now()}`);
-
-  await save();
-  render();
-  renderHistory();
+  history.unshift(`${d>0?'➕':'➖'} ${p} (${user}) — ${now()}`);
+  save(); render();
 }
 
-window.render=()=>{
-  stock.innerHTML="";
-  catSelect.innerHTML="";
+function render(){
+  stock.innerHTML = "";
+  catSelect.innerHTML = "";
+  historyDiv.innerHTML = history.slice(0,30).map(h=>`<div>${h}</div>`).join("");
 
-  Object.keys(data).forEach(c=>{
-    catSelect.innerHTML+=`<option>${c}</option>`;
-    let box=document.createElement("div");
-    box.className="box";
-    box.innerHTML=`<h3>${c}</h3>`;
+  for(let c in data){
+    catSelect.innerHTML += `<option>${c}</option>`;
+    let box = document.createElement("div");
+    box.className = "box";
+    box.innerHTML = `<h3>${c}</h3>`;
 
-    Object.keys(data[c]).forEach(p=>{
-      let q=data[c][p];
-      let cls=q===0?"zero":q<=2?"low":"";
-      box.innerHTML+=`
+    for(let p in data[c]){
+      let q = data[c][p];
+      box.innerHTML += `
       <div class="item">
-        <span class="${cls}">${p}: ${q}${q<=2?' ⚠️':''}</span>
+        <span class="${q===0?'zero':''}">${p}: ${q}</span>
         <span class="controls">
           <button onclick="changeQty('${c}','${p}',-1)">−</button>
           <button onclick="changeQty('${c}','${p}',1)">+</button>
         </span>
       </div>`;
-    });
-    stock.appendChild(box);
-  });
-}
-
-window.renderHistory=()=>{
-  const s=dateStart.value?new Date(dateStart.value):null;
-  const e=dateEnd.value?new Date(dateEnd.value+"T23:59"):null;
-
-  const filter=x=>{
-    const d=new Date(x.split("—")[1]);
-    return (!s||d>=s)&&(!e||d<=e);
-  };
-
-  histAdd.innerHTML=history.adicoes.filter(filter).map(x=>`<div>${x}</div>`).join("");
-  histRem.innerHTML=history.remocoes.filter(filter).map(x=>`<div>${x}</div>`).join("");
-}
-
-window.monthlyReport=()=>{
-  const m=monthPick.value;
-  if(!m) return;
-
-  let add=0,rem=0;
-  [...history.adicoes,...history.remocoes].forEach(x=>{
-    if(x.includes(m.split("-")[1]+"/"+m.split("-")[0])){
-      x.includes("➕")?add++:rem++;
     }
-  });
-
-  report.innerHTML=`<b>Adições:</b> ${add}<br><b>Remoções:</b> ${rem}`;
+    stock.appendChild(box);
+  }
 }
 
-document.getElementById("appVersion").innerText = APP_VERSION;
-
-load();
-</script>
-
-<script>
-btnEstoque.onclick=()=>{
+btnEstoque.onclick = ()=>{
   btnEstoque.classList.add("active");
   btnHistorico.classList.remove("active");
   estoqueTab.classList.remove("hidden");
   historicoTab.classList.add("hidden");
 }
-btnHistorico.onclick=()=>{
+
+btnHistorico.onclick = ()=>{
   btnHistorico.classList.add("active");
   btnEstoque.classList.remove("active");
   historicoTab.classList.remove("hidden");
   estoqueTab.classList.add("hidden");
 }
+
+document.getElementById("ver").innerText = APP_VERSION;
+
+load();
 </script>
 
 </body>
