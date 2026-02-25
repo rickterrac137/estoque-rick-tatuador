@@ -24,16 +24,7 @@ button{font-size:16px}
 <body>
 
 <script>
-let pin = localStorage.getItem("pinRick");
-if(!pin){
-  pin = prompt("Crie um PIN:");
-  localStorage.setItem("pinRick", pin);
-}
-if(prompt("Digite o PIN:") !== pin){
-  alert("PIN incorreto");
-  location.reload();
-}
-let user = prompt("Seu nome:");
+let user = prompt("Digite seu nome:"); // Apenas nome do usuário
 </script>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
