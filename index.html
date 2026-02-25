@@ -4,21 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
-
 <link rel="manifest" href="manifest.json">
-
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
 button{font-size:16px}
-.item{display:flex;justify-content:space-between;align-items:center}
-.controls button{width:auto}
+.item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
+.controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
 </style>
 </head>
-
 <body>
 
 <script>
@@ -76,13 +73,7 @@ let history = [];
 
 async function load(){
   const snap = await getDoc(doc(db,"estoque","principal"));
-  if(snap.exists()){
-    data = snap.data().data;
-  } else {
-    data = {};
-    await save();
-  }
-
+  if(snap.exists()) data = snap.data().data || {};
   const h = await getDoc(doc(db,"estoque","history"));
   history = h.exists() ? h.data().list : [];
   render();
@@ -95,6 +86,7 @@ async function save(){
 
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
+  if(!cat || !newName.value) return alert("Preencha categoria e produto");
   if(!data[cat]) data[cat]={};
   data[cat][newName.value] = parseInt(newQty.value)||0;
   history.unshift(`➕ ${newName.value} (${user})`);
@@ -102,28 +94,34 @@ window.addProduct = async ()=>{
   await save(); render();
 }
 
+window.changeQty = async (cat, prod, delta)=>{
+  data[cat][prod] += delta;
+  if(data[cat][prod] < 0) data[cat][prod] = 0;
+  history.unshift(`${delta>0?'➕':'➖'} ${prod} (${user})`);
+  await save(); render();
+}
+
 window.render = ()=>{
   stock.innerHTML="";
   catSelect.innerHTML="";
-  Object.keys(data).forEach(c=>{
-    catSelect.innerHTML+=`<option>${c}</option>`;
+  Object.keys(data).forEach(cat=>{
+    catSelect.innerHTML+=`<option>${cat}</option>`;
     let box=document.createElement("div");
     box.className="box";
-    box.innerHTML=`<h3>${c}</h3>`;
-    Object.keys(data[c]).forEach(p=>{
-      let z=data[c][p]==0?'zero':'';
+    box.innerHTML=`<h3>${cat}</h3>`;
+    Object.keys(data[cat]).forEach(prod=>{
+      let qty=data[cat][prod];
       box.innerHTML+=`
       <div class="item">
-        <span class="${z}">${p}: ${data[c][p]}</span>
+        <span class="${qty===0?'zero':''}">${prod}: ${qty}</span>
         <span class="controls">
-          <button onclick="data['${c}']['${p}']--;history.unshift('➖ ${p} (${user})');save().then(render)">-</button>
-          <button onclick="data['${c}']['${p}']++;history.unshift('➕ ${p} (${user})');save().then(render)">+</button>
+          <button onclick="changeQty('${cat}','${prod}',-1)">−</button>
+          <button onclick="changeQty('${cat}','${prod}',1)">+</button>
         </span>
       </div>`;
     });
     stock.appendChild(box);
   });
-
   historyDiv.innerHTML = history.slice(0,20).map(h=>`<div>${h}</div>`).join("");
 }
 
