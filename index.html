@@ -101,6 +101,42 @@ window.changeQty = async (cat, prod, delta)=>{
   await save(); render();
 }
 
+window.editCategory = async (oldCat)=>{
+  let newName = prompt("Novo nome da categoria:", oldCat);
+  if(newName && newName !== oldCat){
+    data[newName] = data[oldCat];
+    delete data[oldCat];
+    history.unshift(`✏️ Categoria "${oldCat}" renomeada para "${newName}" (${user})`);
+    await save(); render();
+  }
+}
+
+window.deleteCategory = async (cat)=>{
+  if(confirm(`Tem certeza que deseja excluir a categoria "${cat}" e todos os produtos?`)){
+    delete data[cat];
+    history.unshift(`🗑️ Categoria "${cat}" excluída (${user})`);
+    await save(); render();
+  }
+}
+
+window.editProduct = async (cat, prod)=>{
+  let newName = prompt("Novo nome do produto:", prod);
+  if(newName && newName !== prod){
+    data[cat][newName] = data[cat][prod];
+    delete data[cat][prod];
+    history.unshift(`✏️ Produto "${prod}" renomeado para "${newName}" (${user})`);
+    await save(); render();
+  }
+}
+
+window.deleteProduct = async (cat, prod)=>{
+  if(confirm(`Tem certeza que deseja excluir o produto "${prod}"?`)){
+    delete data[cat][prod];
+    history.unshift(`🗑️ Produto "${prod}" excluído (${user})`);
+    await save(); render();
+  }
+}
+
 window.render = ()=>{
   stock.innerHTML="";
   catSelect.innerHTML="";
@@ -108,7 +144,10 @@ window.render = ()=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
     let box=document.createElement("div");
     box.className="box";
-    box.innerHTML=`<h3>${cat}</h3>`;
+    box.innerHTML=`<h3>${cat} 
+      <button onclick="editCategory('${cat}')">✏️</button>
+      <button onclick="deleteCategory('${cat}')">🗑️</button>
+    </h3>`;
     Object.keys(data[cat]).forEach(prod=>{
       let qty=data[cat][prod];
       box.innerHTML+=`
@@ -117,6 +156,8 @@ window.render = ()=>{
         <span class="controls">
           <button onclick="changeQty('${cat}','${prod}',-1)">−</button>
           <button onclick="changeQty('${cat}','${prod}',1)">+</button>
+          <button onclick="editProduct('${cat}','${prod}')">✏️</button>
+          <button onclick="deleteProduct('${cat}','${prod}')">🗑️</button>
         </span>
       </div>`;
     });
