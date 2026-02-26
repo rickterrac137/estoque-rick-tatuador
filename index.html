@@ -14,10 +14,33 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
-.highlight{background:#ffff99;border-radius:4px} /* destaque persistente */
+.highlight{background:#ffff99;border-radius:4px}
 .footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
 .clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
 .clear-btn:hover{opacity:0.8}
+
+/* 🔥 ALERTA DE NOVA VERSÃO */
+.update-banner{
+position:fixed;
+bottom:0;
+left:0;
+right:0;
+background:#000;
+color:#fff;
+padding:12px;
+text-align:center;
+display:none;
+z-index:9999;
+}
+.update-banner button{
+background:#4CAF50;
+color:white;
+border:none;
+padding:6px 12px;
+margin-left:10px;
+border-radius:4px;
+cursor:pointer;
+}
 </style>
 </head>
 <body>
@@ -57,6 +80,11 @@ let user = prompt("Digite seu nome:");
 
 <div class="footer" id="footer"></div>
 
+<div class="update-banner" id="updateBanner">
+Nova versão disponível 🚀
+<button onclick="forceReload()">Atualizar agora</button>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -64,12 +92,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
-  authDomain: "estoque-rick-tatuador.firebaseapp.com",
-  projectId: "estoque-rick-tatuador",
-  storageBucket: "estoque-rick-tatuador.firebasestorage.app",
-  messagingSenderId: "446550868475",
-  appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_AUTH_DOMAIN",
+  projectId: "SEU_PROJECT_ID",
+  storageBucket: "SEU_BUCKET",
+  messagingSenderId: "SEU_ID",
+  appId: "SEU_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -79,18 +107,32 @@ let data = {};
 let history = { adicoes: [], remocoes: [] };
 let lastFound = null;
 
-/* 🔴 VERSÃO AUTOMÁTICA PELO TIMESTAMP */
-(function showVersion(){
-  const now = new Date();
-  const pad = n => n.toString().padStart(2,'0');
-  const build = `Build ${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
-  document.getElementById("footer").innerHTML = `
-    Versão do App: ${build}<br>
-    Criado por: Denis Costa
-  `;
-})();
+/* 🔴 VERSÃO AUTOMÁTICA */
+const BUILD_VERSION = Date.now();
+document.getElementById("footer").innerHTML = `
+Versão do App: Build ${BUILD_VERSION}<br>
+Criado por: Denis Costa
+`;
 
-/* 🔴 TEMPO REAL */
+/* 🔥 DETECTOR AUTOMÁTICO DE NOVA VERSÃO */
+async function checkForUpdate(){
+  try{
+    const response = await fetch(window.location.href + '?t=' + Date.now(), {cache:"no-store"});
+    const text = await response.text();
+    const serverVersionMatch = text.match(/Date\.now\(\)/);
+    if(!serverVersionMatch){
+      document.getElementById("updateBanner").style.display="block";
+    }
+  }catch(e){}
+}
+
+setInterval(checkForUpdate, 60000); // verifica a cada 60 segundos
+
+window.forceReload = ()=>{
+  window.location.reload(true);
+};
+
+/* 🔴 FIREBASE REALTIME */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
   if(snap.exists()) {
     data = snap.data().data || {};
@@ -105,7 +147,6 @@ onSnapshot(doc(db,"estoque","history"), snap=>{
   }
 });
 
-/* 🔴 CARREGAR DADOS INICIAIS */
 async function load(){
   const p = await getDoc(doc(db,"estoque","principal"));
   data = p.exists() && p.data().data ? p.data().data : {};
@@ -116,76 +157,40 @@ async function load(){
   render();
 }
 
-/* 🔴 SALVAR NO FIRESTORE */
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
   await setDoc(doc(db,"estoque","history"),history);
 }
 
-/* ➕ ADICIONAR PRODUTO */
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
-
   data[cat][newName.value] = parseInt(newQty.value)||0;
-
-  history.adicoes.unshift(
-    `➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`
-  );
-
+  history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
   newCat.value=newName.value=newQty.value="";
   await save();
 };
 
-/* ➕➖ ALTERAR QUANTIDADE */
 window.changeQty = async (cat, prod, delta)=>{
   data[cat][prod] += delta;
   if(data[cat][prod] < 0) data[cat][prod] = 0;
-
   const msg = `${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
   delta>0 ? history.adicoes.unshift(msg) : history.remocoes.unshift(msg);
-
   await save();
 };
 
-/* ✏️🗑️ CATEGORIA */
-window.editCategory = async (cat)=>{
-  let n = prompt("Novo nome da categoria:", cat);
-  if(!n || n===cat) return;
-  data[n]=data[cat]; delete data[cat];
+window.clearHistory = async(type)=>{
+  if(!confirm("Tem certeza que deseja limpar o histórico?")) return;
+  history[type] = [];
   await save();
 };
 
-window.deleteCategory = async (cat)=>{
-  if(!confirm("Excluir categoria inteira?")) return;
-  delete data[cat];
-  await save();
-};
-
-/* ✏️🗑️ PRODUTO */
-window.editProduct = async (cat,prod)=>{
-  let n = prompt("Novo nome do produto:", prod);
-  if(!n || n===prod) return;
-  data[cat][n]=data[cat][prod]; delete data[cat][prod];
-  await save();
-};
-
-window.deleteProduct = async (cat,prod)=>{
-  if(!confirm("Excluir produto?")) return;
-  delete data[cat][prod];
-  await save();
-};
-
-/* 🔍 PESQUISA COM DESTAQUE PERSISTENTE */
 window.buscarProduto = ()=>{
   const termo = search.value.toLowerCase();
-
   if(lastFound) lastFound.classList.remove("highlight");
-
   const el = Array.from(document.querySelectorAll('[data-prod]'))
                   .find(d=>d.dataset.prod.includes(termo));
-
   if(el){
     el.scrollIntoView({behavior:"smooth", block:"center"});
     el.classList.add("highlight");
@@ -196,18 +201,13 @@ window.buscarProduto = ()=>{
   }
 };
 
-/* 🎨 RENDER */
 function render(){
   stock.innerHTML=""; catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
     let b=document.createElement("div");
     b.className="box";
-    b.innerHTML=`<h3>${cat}
-      <button onclick="editCategory('${cat}')">✏️</button>
-      <button onclick="deleteCategory('${cat}')">🗑️</button>
-    </h3>`;
-
+    b.innerHTML=`<h3>${cat}</h3>`;
     Object.keys(data[cat]).forEach(p=>{
       let q=data[cat][p];
       let cls = q===0?"zero":q<5?"low":"";
@@ -217,8 +217,6 @@ function render(){
         <span class="controls">
           <button onclick="changeQty('${cat}','${p}',-1)">−</button>
           <button onclick="changeQty('${cat}','${p}',1)">+</button>
-          <button onclick="editProduct('${cat}','${p}')">✏️</button>
-          <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
         </span>
       </div>`;
     });
@@ -230,13 +228,6 @@ function renderHistory(){
   histAdd.innerHTML = history.adicoes.map(h=>`<div>${h}</div>`).join("");
   histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
 }
-
-/* 🔴 LIMPAR HISTÓRICO */
-window.clearHistory = async(type)=>{
-  if(!confirm("Tem certeza que deseja limpar o histórico?")) return;
-  history[type] = [];
-  await save();
-};
 
 load();
 </script>
