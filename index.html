@@ -17,6 +17,7 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
+.highlight{background:#ffff99;border-radius:4px} /* destaque persistente */
 </style>
 </head>
 
@@ -73,6 +74,7 @@ const db = getFirestore(app);
 
 let data = {};
 let history = { adicoes: [], remocoes: [] };
+let lastFound = null; // elemento destacado da pesquisa
 
 /* 🔴 TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
@@ -159,12 +161,25 @@ window.deleteProduct = async (cat,prod)=>{
   await save();
 };
 
-/* 🔍 PESQUISA */
+/* 🔍 PESQUISA COM DESTAQUE PERSISTENTE */
 window.buscarProduto = ()=>{
   const termo = search.value.toLowerCase();
-  const el = document.querySelector(`[data-prod*="${termo}"]`);
-  if(el) el.scrollIntoView({behavior:"smooth",block:"center"});
-  else alert("Produto não encontrado");
+
+  // remove destaque anterior
+  if(lastFound) lastFound.classList.remove("highlight");
+
+  // procura produto
+  const el = Array.from(document.querySelectorAll('[data-prod]'))
+                  .find(d=>d.dataset.prod.includes(termo));
+
+  if(el){
+    el.scrollIntoView({behavior:"smooth", block:"center"});
+    el.classList.add("highlight");
+    lastFound = el;
+  } else {
+    alert("Produto não encontrado");
+    lastFound = null;
+  }
 };
 
 /* 🎨 RENDER */
