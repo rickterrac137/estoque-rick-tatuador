@@ -28,7 +28,7 @@ button{font-size:16px}
 <body>
 
 <script>
-const APP_VERSION = "v1.9.0";
+const APP_VERSION = "v1.9.1";
 let user = prompt("Digite seu nome:");
 </script>
 
@@ -60,8 +60,14 @@ let user = prompt("Digite seu nome:");
 
 <!-- HISTÓRICO -->
 <div id="historicoTab" class="hidden">
-<div class="box"><h3>➕ Adições</h3><div id="histAdd"></div></div>
-<div class="box"><h3>➖ Remoções</h3><div id="histRem"></div></div>
+  <div class="box">
+    <h3>➕ Adições</h3>
+    <div id="histAdd"></div>
+  </div>
+  <div class="box">
+    <h3>➖ Remoções</h3>
+    <div id="histRem"></div>
+  </div>
 </div>
 
 <div class="footer">
@@ -90,18 +96,19 @@ let histRem = [];
 function showTab(tab){
   estoqueTab.classList.toggle("hidden", tab !== "estoque");
   historicoTab.classList.toggle("hidden", tab !== "historico");
+  if(tab === "historico") renderHistory();
 }
 
 /* ---------- LOAD ---------- */
 async function load(){
   const estoqueSnap = await db.collection("estoque").doc("principal").get();
-  if(estoqueSnap.exists) data = estoqueSnap.data().data || {};
+  data = estoqueSnap.exists ? estoqueSnap.data().data || {} : {};
 
   const addSnap = await db.collection("estoque").doc("history_add").get();
-  histAdd = addSnap.exists ? addSnap.data().list : [];
+  histAdd = addSnap.exists ? addSnap.data().list || [] : [];
 
   const remSnap = await db.collection("estoque").doc("history_rem").get();
-  histRem = remSnap.exists ? remSnap.data().list : [];
+  histRem = remSnap.exists ? remSnap.data().list || [] : [];
 
   render();
 }
@@ -114,11 +121,13 @@ async function saveEstoque(){
 async function saveAdd(msg){
   histAdd.unshift(msg);
   await db.collection("estoque").doc("history_add").set({list:histAdd});
+  renderHistory();
 }
 
 async function saveRem(msg){
   histRem.unshift(msg);
   await db.collection("estoque").doc("history_rem").set({list:histRem});
+  renderHistory();
 }
 
 /* ---------- ACTIONS ---------- */
@@ -193,9 +202,11 @@ function render(){
     });
     stock.appendChild(box);
   });
+}
 
-  histAdd.innerHTML = histAdd.slice(0,40).join("<br>");
-  histRem.innerHTML = histRem.slice(0,40).join("<br>");
+function renderHistory(){
+  histAdd.innerHTML = histAdd.slice(0,40).map(h=>`<div>${h}</div>`).join("");
+  histRem.innerHTML = histRem.slice(0,40).map(h=>`<div>${h}</div>`).join("");
 }
 
 load();
