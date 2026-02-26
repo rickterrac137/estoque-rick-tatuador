@@ -84,6 +84,19 @@ let data = {};
 let history = { adicoes: [], remocoes: [] };
 let lastFound = null;
 
+/* 🔴 VERSÃO DINÂMICA DO APP */
+const APP_VERSION = "2.0.1"; // altere aqui e a versão muda para todos os usuários
+document.getElementById("footer").innerHTML = `
+  Versão do App: ${APP_VERSION}<br>
+  Criado por Denis Costa
+`;
+
+// Atualiza a versão no Firestore (opcional, apenas se quiser manter sincronizado)
+async function updateVersionFirestore(){
+  await setDoc(doc(db,"config","version"),{version: APP_VERSION});
+}
+updateVersionFirestore();
+
 /* 🔴 TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
   if(snap.exists()) {
@@ -232,29 +245,7 @@ window.clearHistory = async(type)=>{
   await save();
 };
 
-/* 🏷️ VERSÃO AUTOMÁTICA DO FIRESTORE */
-async function loadAppVersion(){
-  const vDoc = await getDoc(doc(db,"config","version"));
-  let version = "2.0.1"; // fallback
-  if(vDoc.exists() && vDoc.data().version) version = vDoc.data().version;
-
-  document.getElementById("footer").innerHTML = `
-    Versão do App: ${version}<br>
-    Criado por Denis Costa
-  `;
-}
-
-onSnapshot(doc(db,"config","version"), snap=>{
-  if(snap.exists() && snap.data().version){
-    document.getElementById("footer").innerHTML = `
-      Versão do App: ${snap.data().version}<br>
-      Criado por Denis Costa
-    `;
-  }
-});
-
 load();
-loadAppVersion();
 </script>
 
 </body>
