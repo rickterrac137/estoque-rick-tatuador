@@ -3,48 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Estoque Rick Tatuador</title>
+<title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
 
 <link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
 
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
-button{font-size:16px}
-.item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
-.controls button{width:auto;margin-left:4px}
+.item{display:flex;justify-content:space-between;align-items:center}
+.controls button{width:auto}
 .zero{color:red;font-weight:bold}
-.low{color:orange;font-weight:bold}
-.tabs{display:flex;margin-bottom:10px}
-.tabs button{flex:1}
-.hidden{display:none}
-details summary{font-weight:bold;cursor:pointer}
-.footer{text-align:center;font-size:12px;color:#666;margin-top:20px}
 </style>
 </head>
 
 <body>
 
 <script>
-const APP_VERSION = "v2.1.0";
 let user = prompt("Digite seu nome:");
 </script>
 
-<h1>ESTOQUE DO ESTÚDIO</h1>
-
-<div class="tabs">
-  <button onclick="showTab('estoque')">📦 Estoque</button>
-  <button onclick="showTab('historico')">📜 Histórico</button>
-</div>
-
-<!-- ESTOQUE -->
-<div id="estoqueTab">
+<h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
 
 <div class="box">
-<input id="search" placeholder="🔍 Pesquisar produto">
-<button onclick="buscarProduto()">Buscar</button>
+<input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
 </div>
 
 <div class="box">
@@ -56,189 +40,106 @@ let user = prompt("Digite seu nome:");
 </div>
 
 <div id="stock"></div>
+
+<div class="box">
+<h3>📜 Histórico de Adições</h3>
+<div id="histAdd"></div>
 </div>
 
-<!-- HISTÓRICO -->
-<div id="historicoTab" class="hidden">
-
-<details open class="box">
-  <summary>➕ Adição de produtos</summary>
-  <div id="histAdd"></div>
-</details>
-
-<details class="box">
-  <summary>➖ Remoção de produtos</summary>
-  <div id="histRem"></div>
-</details>
-
+<div class="box">
+<h3>📜 Histórico de Remoções</h3>
+<div id="histRem"></div>
 </div>
 
-<div class="footer">
-<div>Versão do app: <b id="ver"></b></div>
-<div>app oficial do denis costa</div>
-</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<script>
-document.getElementById("ver").innerText = APP_VERSION;
-
-firebase.initializeApp({
+const firebaseConfig = {
   apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
   authDomain: "estoque-rick-tatuador.firebaseapp.com",
-  projectId: "estoque-rick-tatuador"
-});
+  projectId: "estoque-rick-tatuador",
+  storageBucket: "estoque-rick-tatuador.firebasestorage.app",
+  messagingSenderId: "446550868475",
+  appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
+};
 
-const db = firebase.firestore();
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 let data = {};
-let histAdd = [];
-let histRem = [];
+let history = { adicoes: [], remocoes: [] };
 
-function showTab(tab){
-  estoqueTab.classList.toggle("hidden", tab !== "estoque");
-  historicoTab.classList.toggle("hidden", tab !== "historico");
-  if(tab === "historico") renderHistory();
-}
-
-/* ---------- LOAD ---------- */
 async function load(){
-  const e = await db.collection("estoque").doc("principal").get();
-  data = e.exists ? e.data().data || {} : {};
+  const p = await getDoc(doc(db,"estoque","principal"));
+  data = p.exists() && p.data().data ? p.data().data : {};
 
-  const a = await db.collection("estoque").doc("history_add").get();
-  histAdd = a.exists ? a.data().list || [] : [];
+  const h = await getDoc(doc(db,"estoque","history"));
+  if(h.exists()){
+    const d = h.data();
+    history.adicoes = Array.isArray(d.adicoes) ? d.adicoes : [];
+    history.remocoes = Array.isArray(d.remocoes) ? d.remocoes : [];
+  }
 
-  const r = await db.collection("estoque").doc("history_rem").get();
-  histRem = r.exists ? r.data().list || [] : [];
-
+  await save();
   render();
 }
 
-/* ---------- SAVE ---------- */
-async function saveEstoque(){
-  await db.collection("estoque").doc("principal").set({data});
+async function save(){
+  await setDoc(doc(db,"estoque","principal"),{data});
+  await setDoc(doc(db,"estoque","history"),history);
 }
 
-async function saveHistory(type, msg){
-  const ref = db.collection("estoque").doc(type);
-  let list = type === "history_add" ? histAdd : histRem;
-  list.unshift(msg);
-  await ref.set({list});
-  renderHistory();
+window.addProduct = async ()=>{
+  let cat = newCat.value || catSelect.value;
+  if(!cat || !newName.value) return alert("Preencha tudo");
+  if(!data[cat]) data[cat]={};
+  data[cat][newName.value] = parseInt(newQty.value)||0;
+  history.adicoes.unshift(`➕ ${newName.value} (${user})`);
+  newCat.value=newName.value=newQty.value="";
+  await save(); render();
 }
 
-/* ---------- ACTIONS ---------- */
-async function addProduct(){
-  const prod = newName.value.trim();
-  const qty = parseInt(newQty.value) || 0;
-  const cat = newCat.value.trim() || catSelect.value;
-
-  if(!prod || !cat) return alert("Preencha tudo");
-
-  if(!data[cat]) data[cat] = {};
-  if(data[cat][prod] !== undefined)
-    return alert("Produto já existe");
-
-  data[cat][prod] = qty;
-
-  await saveEstoque();
-  await saveHistory("history_add", `➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
-
-  newName.value=newQty.value=newCat.value="";
-  render();
+window.changeQty = async (cat, prod, delta)=>{
+  data[cat][prod] += delta;
+  if(data[cat][prod] < 0) data[cat][prod] = 0;
+  (delta>0?history.adicoes:history.remocoes)
+    .unshift(`${delta>0?'➕':'➖'} ${prod} (${user})`);
+  await save(); render();
 }
 
-async function changeQty(c,p,d){
-  data[c][p]+=d;
-  if(data[c][p]<0) data[c][p]=0;
-
-  await saveEstoque();
-
-  const msg = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
-  await saveHistory(d>0?"history_add":"history_rem", msg);
-
-  render();
-}
-
-async function editCategory(cat){
-  const n = prompt("Novo nome da categoria:", cat);
-  if(!n || n===cat) return;
-  data[n]=data[cat];
-  delete data[cat];
-  await saveEstoque();
-  render();
-}
-
-async function deleteCategory(cat){
-  if(!confirm("Excluir categoria e produtos?")) return;
-  delete data[cat];
-  await saveEstoque();
-  render();
-}
-
-async function editProduct(c,p){
-  const n = prompt("Novo nome do produto:", p);
-  if(!n || n===p) return;
-  data[c][n]=data[c][p];
-  delete data[c][p];
-  await saveEstoque();
-  render();
-}
-
-async function deleteProduct(c,p){
-  if(!confirm("Excluir produto?")) return;
-  delete data[c][p];
-  await saveEstoque();
-  render();
-}
-
-/* ---------- SEARCH ---------- */
-function buscarProduto(){
-  const t = search.value.toLowerCase();
-  const el = document.querySelector(`[data-prod*="${t}"]`);
-  if(el){
-    el.scrollIntoView({behavior:"smooth",block:"center"});
-  } else alert("Produto não encontrado");
-}
-
-/* ---------- RENDER ---------- */
-function render(){
-  stock.innerHTML="";
-  catSelect.innerHTML="";
-  Object.keys(data).sort().forEach(c=>{
-    catSelect.innerHTML+=`<option>${c}</option>`;
-    const box=document.createElement("div");
-    box.className="box";
-    box.innerHTML=`
-      <h3>${c}
-        <button onclick="editCategory('${c}')">✏️</button>
-        <button onclick="deleteCategory('${c}')">🗑️</button>
-      </h3>`;
-    Object.keys(data[c]).sort().forEach(p=>{
-      const q=data[c][p];
-      box.innerHTML+=`
-      <div class="item" data-prod="${p.toLowerCase()}">
-        <span class="${q===0?'zero':q<=2?'low':''}">${p}: ${q}</span>
+window.render = ()=>{
+  stock.innerHTML=""; catSelect.innerHTML="";
+  Object.keys(data).forEach(cat=>{
+    catSelect.innerHTML+=`<option>${cat}</option>`;
+    let b=document.createElement("div");
+    b.className="box";
+    b.innerHTML=`<h3>${cat}</h3>`;
+    Object.keys(data[cat]).forEach(p=>{
+      let q=data[cat][p];
+      b.innerHTML+=`
+      <div class="item">
+        <span class="${q===0?'zero':''}">${p}: ${q}</span>
         <span class="controls">
-          <button onclick="changeQty('${c}','${p}',-1)">−</button>
-          <button onclick="changeQty('${c}','${p}',1)">+</button>
-          <button onclick="editProduct('${c}','${p}')">✏️</button>
-          <button onclick="deleteProduct('${c}','${p}')">🗑️</button>
+          <button onclick="changeQty('${cat}','${p}',-1)">−</button>
+          <button onclick="changeQty('${cat}','${p}',1)">+</button>
         </span>
       </div>`;
     });
-    stock.appendChild(box);
+    stock.appendChild(b);
   });
-}
 
-function renderHistory(){
-  histAdd.innerHTML = histAdd.length ? histAdd.map(h=>`<div>${h}</div>`).join("") : "<i>Nenhum registro</i>";
-  histRem.innerHTML = histRem.length ? histRem.map(h=>`<div>${h}</div>`).join("") : "<i>Nenhum registro</i>";
+  histAdd.innerHTML = history.adicoes.slice(0,15).map(x=>`<div>${x}</div>`).join("");
+  histRem.innerHTML = history.remocoes.slice(0,15).map(x=>`<div>${x}</div>`).join("");
 }
 
 load();
+</script>
+
+<script>
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("service-worker.js");
+}
 </script>
 
 </body>
