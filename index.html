@@ -6,7 +6,6 @@
 <title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
 
 <link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
 
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
@@ -22,13 +21,14 @@ button{font-size:16px}
 .tabs{display:flex;margin-bottom:10px}
 .tabs button{flex:1}
 .hidden{display:none}
+.highlight{background:#ffffcc}
 </style>
 </head>
 
 <body>
 
 <script>
-const APP_VERSION = "v1.8.1";
+const APP_VERSION = "v1.8.2";
 let user = prompt("Digite seu nome:");
 </script>
 
@@ -43,7 +43,8 @@ let user = prompt("Digite seu nome:");
 <div id="estoqueTab">
 
 <div class="box">
-<input id="search" placeholder="🔍 Pesquisar produto" oninput="render()">
+<input id="search" placeholder="🔍 Pesquisar produto">
+<button onclick="buscarProduto()">Buscar</button>
 </div>
 
 <div class="box">
@@ -100,127 +101,82 @@ async function load(){
     histAdd = h.data().add || [];
     histRem = h.data().rem || [];
   }
-
   render();
 }
 
 async function saveAll(){
-  await db.collection("estoque").doc("principal").set({ data });
+  await db.collection("estoque").doc("principal").set({data});
   await db.collection("estoque").doc("history").set({
     add: histAdd,
     rem: histRem
   });
 }
 
-function addProduct(){
+async function addProduct(){
   const prod = newName.value.trim();
   const qty = parseInt(newQty.value) || 0;
   const category = newCat.value.trim() || catSelect.value;
 
-  if(!prod || !category){
-    alert("Preencha categoria e produto");
-    return;
-  }
+  if(!prod || !category) return alert("Preencha tudo");
 
   if(!data[category]) data[category] = {};
-  if(data[category][prod] !== undefined){
-    alert("Produto já existe");
-    return;
-  }
+  if(data[category][prod] !== undefined)
+    return alert("Produto já existe");
 
   data[category][prod] = qty;
   histAdd.unshift(`➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
 
-  newCat.value = "";
-  newName.value = "";
-  newQty.value = "";
-
-  saveAll();
+  newName.value=newQty.value=newCat.value="";
+  await saveAll();
   render();
 }
 
-function changeQty(c,p,d){
+async function changeQty(c,p,d){
   data[c][p] += d;
   if(data[c][p] < 0) data[c][p] = 0;
 
   const msg = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
   d>0 ? histAdd.unshift(msg) : histRem.unshift(msg);
 
-  saveAll();
+  await saveAll();
   render();
 }
 
-function editCategory(c){
-  const n = prompt("Novo nome da categoria:", c);
-  if(n && n !== c){
-    data[n] = data[c];
-    delete data[c];
-    saveAll();
-    render();
-  }
-}
+function buscarProduto(){
+  const termo = search.value.toLowerCase();
+  if(!termo) return;
 
-function deleteCategory(c){
-  if(confirm("Excluir categoria?")){
-    delete data[c];
-    saveAll();
-    render();
-  }
-}
-
-function editProduct(c,p){
-  const n = prompt("Novo nome do produto:", p);
-  if(n && n !== p){
-    data[c][n] = data[c][p];
-    delete data[c][p];
-    saveAll();
-    render();
-  }
-}
-
-function deleteProduct(c,p){
-  if(confirm("Excluir produto?")){
-    delete data[c][p];
-    saveAll();
-    render();
+  const el = document.querySelector(`[data-prod*="${termo}"]`);
+  if(el){
+    el.classList.add("highlight");
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    setTimeout(()=>el.classList.remove("highlight"),2000);
+  } else {
+    alert("Produto não encontrado");
   }
 }
 
 function render(){
-  const filtro = search.value.toLowerCase();
-  stock.innerHTML = "";
-  catSelect.innerHTML = "";
+  stock.innerHTML="";
+  catSelect.innerHTML="";
 
   Object.keys(data).sort().forEach(c=>{
-    catSelect.innerHTML += `<option>${c}</option>`;
+    catSelect.innerHTML+=`<option>${c}</option>`;
+    const box=document.createElement("div");
+    box.className="box";
+    box.innerHTML=`<h3>${c}</h3>`;
 
-    const produtos = Object.keys(data[c])
-      .filter(p => p.toLowerCase().includes(filtro))
-      .sort();
-
-    if(produtos.length === 0) return;
-
-    const box = document.createElement("div");
-    box.className = "box";
-    box.innerHTML = `<h3>${c}
-      <button onclick="editCategory('${c}')">✏️</button>
-      <button onclick="deleteCategory('${c}')">🗑️</button>
-    </h3>`;
-
-    produtos.forEach(p=>{
-      const q = data[c][p];
-      box.innerHTML += `
-      <div class="item">
+    Object.keys(data[c]).sort().forEach(p=>{
+      const q=data[c][p];
+      box.innerHTML+=`
+      <div class="item" data-prod="${p.toLowerCase()}">
         <span class="${q===0?'zero':q<=2?'low':''}">${p}: ${q}</span>
         <span class="controls">
           <button onclick="changeQty('${c}','${p}',-1)">−</button>
           <button onclick="changeQty('${c}','${p}',1)">+</button>
-          <button onclick="editProduct('${c}','${p}')">✏️</button>
-          <button onclick="deleteProduct('${c}','${p}')">🗑️</button>
         </span>
       </div>`;
     });
-
     stock.appendChild(box);
   });
 
