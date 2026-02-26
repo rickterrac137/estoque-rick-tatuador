@@ -19,7 +19,27 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
 .clear-btn:hover{opacity:0.8}
 
-/* 🔥 ALERTA DE NOVA VERSÃO */
+/* 🔥 ANIMAÇÃO DE CLIQUE */
+button{
+transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.08s ease;
+}
+
+button:active{
+transform: scale(0.95);
+box-shadow: 0 2px 4px rgba(0,0,0,0.3) inset;
+opacity: 0.85;
+}
+
+button.clicked{
+animation: clickFlash 0.18s ease;
+}
+
+@keyframes clickFlash{
+0%{ filter: brightness(1.2); }
+100%{ filter: brightness(1); }
+}
+
+/* 🔥 ALERTA NOVA VERSÃO */
 .update-banner{
 position:fixed;
 bottom:0;
@@ -92,12 +112,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY",
-  authDomain: "SEU_AUTH_DOMAIN",
-  projectId: "SEU_PROJECT_ID",
-  storageBucket: "SEU_BUCKET",
-  messagingSenderId: "SEU_ID",
-  appId: "SEU_APP_ID"
+  apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
+  authDomain: "estoque-rick-tatuador.firebaseapp.com",
+  projectId: "estoque-rick-tatuador",
+  storageBucket: "estoque-rick-tatuador.firebasestorage.app",
+  messagingSenderId: "446550868475",
+  appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -114,19 +134,18 @@ Versão do App: Build ${BUILD_VERSION}<br>
 Criado por: Denis Costa
 `;
 
-/* 🔥 DETECTOR AUTOMÁTICO DE NOVA VERSÃO */
+/* 🔥 DETECTOR NOVA VERSÃO */
 async function checkForUpdate(){
   try{
     const response = await fetch(window.location.href + '?t=' + Date.now(), {cache:"no-store"});
     const text = await response.text();
-    const serverVersionMatch = text.match(/Date\.now\(\)/);
-    if(!serverVersionMatch){
+    if(!text.includes(BUILD_VERSION)){
       document.getElementById("updateBanner").style.display="block";
     }
   }catch(e){}
 }
 
-setInterval(checkForUpdate, 60000); // verifica a cada 60 segundos
+setInterval(checkForUpdate, 60000);
 
 window.forceReload = ()=>{
   window.location.reload(true);
@@ -230,6 +249,18 @@ function renderHistory(){
 }
 
 load();
+</script>
+
+<script>
+/* 🔥 ANIMAÇÃO GLOBAL DE CLIQUE */
+document.addEventListener("click", function(e){
+  if(e.target.tagName === "BUTTON"){
+    e.target.classList.add("clicked");
+    setTimeout(()=>{
+      e.target.classList.remove("clicked");
+    },180);
+  }
+});
 </script>
 
 </body>
