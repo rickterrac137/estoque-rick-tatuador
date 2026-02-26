@@ -28,7 +28,7 @@ button{font-size:16px}
 <body>
 
 <script>
-const APP_VERSION = "v1.8.2";
+const APP_VERSION = "v1.9.0";
 let user = prompt("Digite seu nome:");
 </script>
 
@@ -92,26 +92,36 @@ function showTab(tab){
   historicoTab.classList.toggle("hidden", tab !== "historico");
 }
 
+/* ---------- LOAD ---------- */
 async function load(){
-  const s = await db.collection("estoque").doc("principal").get();
-  if(s.exists) data = s.data().data || {};
+  const estoqueSnap = await db.collection("estoque").doc("principal").get();
+  if(estoqueSnap.exists) data = estoqueSnap.data().data || {};
 
-  const h = await db.collection("estoque").doc("history").get();
-  if(h.exists){
-    histAdd = h.data().add || [];
-    histRem = h.data().rem || [];
-  }
+  const addSnap = await db.collection("estoque").doc("history_add").get();
+  histAdd = addSnap.exists ? addSnap.data().list : [];
+
+  const remSnap = await db.collection("estoque").doc("history_rem").get();
+  histRem = remSnap.exists ? remSnap.data().list : [];
+
   render();
 }
 
-async function saveAll(){
+/* ---------- SAVE ---------- */
+async function saveEstoque(){
   await db.collection("estoque").doc("principal").set({data});
-  await db.collection("estoque").doc("history").set({
-    add: histAdd,
-    rem: histRem
-  });
 }
 
+async function saveAdd(msg){
+  histAdd.unshift(msg);
+  await db.collection("estoque").doc("history_add").set({list:histAdd});
+}
+
+async function saveRem(msg){
+  histRem.unshift(msg);
+  await db.collection("estoque").doc("history_rem").set({list:histRem});
+}
+
+/* ---------- ACTIONS ---------- */
 async function addProduct(){
   const prod = newName.value.trim();
   const qty = parseInt(newQty.value) || 0;
@@ -124,10 +134,11 @@ async function addProduct(){
     return alert("Produto já existe");
 
   data[category][prod] = qty;
-  histAdd.unshift(`➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
+
+  await saveEstoque();
+  await saveAdd(`➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
 
   newName.value=newQty.value=newCat.value="";
-  await saveAll();
   render();
 }
 
@@ -135,13 +146,15 @@ async function changeQty(c,p,d){
   data[c][p] += d;
   if(data[c][p] < 0) data[c][p] = 0;
 
-  const msg = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
-  d>0 ? histAdd.unshift(msg) : histRem.unshift(msg);
+  await saveEstoque();
 
-  await saveAll();
+  const msg = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
+  d>0 ? await saveAdd(msg) : await saveRem(msg);
+
   render();
 }
 
+/* ---------- SEARCH ---------- */
 function buscarProduto(){
   const termo = search.value.toLowerCase();
   if(!termo) return;
@@ -156,6 +169,7 @@ function buscarProduto(){
   }
 }
 
+/* ---------- RENDER ---------- */
 function render(){
   stock.innerHTML="";
   catSelect.innerHTML="";
@@ -180,8 +194,8 @@ function render(){
     stock.appendChild(box);
   });
 
-  histAdd.innerHTML = histAdd.slice(0,30).join("<br>");
-  histRem.innerHTML = histRem.slice(0,30).join("<br>");
+  histAdd.innerHTML = histAdd.slice(0,40).join("<br>");
+  histRem.innerHTML = histRem.slice(0,40).join("<br>");
 }
 
 load();
