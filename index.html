@@ -28,7 +28,7 @@ button{font-size:16px}
 <body>
 
 <script>
-const APP_VERSION = "v1.7.2";
+const APP_VERSION = "v1.7.4";
 let user = prompt("Digite seu nome:");
 </script>
 
@@ -39,6 +39,7 @@ let user = prompt("Digite seu nome:");
   <button onclick="showTab('historico')">📜 Histórico</button>
 </div>
 
+<!-- ABA ESTOQUE -->
 <div id="estoqueTab">
 
 <div class="box">
@@ -56,31 +57,10 @@ let user = prompt("Digite seu nome:");
 <div id="stock"></div>
 </div>
 
+<!-- ABA HISTÓRICO -->
 <div id="historicoTab" class="hidden">
-<div class="box">
-<h3>➕ Adições</h3>
-<div id="histAdd"></div>
-</div>
-
-<div class="box">
-<h3>➖ Remoções</h3>
-<div id="histRem"></div>
-</div>
-</div>
-
-<div id="updateBox" style="
-display:none;
-position:fixed;
-top:0;
-left:0;
-right:0;
-background:#000;
-color:#fff;
-padding:10px;
-text-align:center;
-z-index:9999;
-font-weight:bold">
-🔄 Atualizando aplicativo…
+<div class="box"><h3>➕ Adições</h3><div id="histAdd"></div></div>
+<div class="box"><h3>➖ Remoções</h3><div id="histRem"></div></div>
 </div>
 
 <div class="footer">
@@ -94,18 +74,14 @@ font-weight:bold">
 <script>
 document.getElementById("ver").innerText = APP_VERSION;
 
-const firebaseConfig = {
+firebase.initializeApp({
   apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
   authDomain: "estoque-rick-tatuador.firebaseapp.com",
-  projectId: "estoque-rick-tatuador",
-};
+  projectId: "estoque-rick-tatuador"
+});
 
-firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-
-let data = {};
-let histAdd = [];
-let histRem = [];
+let data = {}, histAdd = [], histRem = [];
 
 function showTab(tab){
   estoqueTab.classList.toggle("hidden", tab!=="estoque");
@@ -125,74 +101,66 @@ async function load(){
 
 async function save(){
   await db.collection("estoque").doc("principal").set({data});
-  await db.collection("estoque").doc("history").set({add:histAdd,rem:histRem});
+  await db.collection("estoque").doc("history").set({add:histAdd, rem:histRem});
 }
 
-/* 🔧 FUNÇÃO CORRIGIDA */
-function addProduct(){
-  const catInput = newCat.value.trim();
-  const selectedCat = catSelect.value;
+async function addProduct(){
   const prod = newName.value.trim();
   const qty = parseInt(newQty.value) || 0;
+  const newCategory = newCat.value.trim();
+  const selectedCategory = catSelect.value;
 
   if(!prod) return alert("Digite o nome do produto");
 
-  let catFinal = "";
+  const category = newCategory || selectedCategory;
+  if(!category) return alert("Escolha ou crie uma categoria");
 
-  if(catInput){
-    catFinal = catInput;
-  } else if(selectedCat){
-    catFinal = selectedCat;
-  } else {
-    return alert("Selecione ou crie uma categoria");
+  if(!data[category]) data[category] = {};
+  if(data[category][prod] !== undefined){
+    return alert("Este produto já existe nesta categoria");
   }
 
-  if(!data[catFinal]) data[catFinal] = {};
-  data[catFinal][prod] = qty;
-
+  data[category][prod] = qty;
   histAdd.unshift(`➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
 
   newCat.value = "";
   newName.value = "";
   newQty.value = "";
 
-  save();
+  await save();
   render();
 }
 
 function changeQty(c,p,d){
   data[c][p] += d;
   if(data[c][p] < 0) data[c][p] = 0;
-  const msg = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
-  d>0 ? histAdd.unshift(msg) : histRem.unshift(msg);
+  const m = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
+  d>0 ? histAdd.unshift(m) : histRem.unshift(m);
   save(); render();
 }
 
 function editCategory(c){
-  let n = prompt("Novo nome da categoria:", c);
+  const n = prompt("Novo nome:", c);
   if(n && n!==c){
-    data[n] = data[c];
+    data[n]=data[c];
     delete data[c];
     save(); render();
   }
 }
-
 function deleteCategory(c){
   if(confirm("Excluir categoria?")){
     delete data[c];
     save(); render();
   }
 }
-
 function editProduct(c,p){
-  let n = prompt("Novo nome do produto:", p);
+  const n = prompt("Novo nome:", p);
   if(n && n!==p){
-    data[c][n] = data[c][p];
+    data[c][n]=data[c][p];
     delete data[c][p];
     save(); render();
   }
 }
-
 function deleteProduct(c,p){
   if(confirm("Excluir produto?")){
     delete data[c][p];
@@ -201,20 +169,30 @@ function deleteProduct(c,p){
 }
 
 function render(){
+  const filtro = search.value.toLowerCase();
   stock.innerHTML="";
   catSelect.innerHTML="";
 
-  for(let c in data){
-    catSelect.innerHTML+=`<option>${c}</option>`;
-    let box=document.createElement("div");
+  const categoriasOrdenadas = Object.keys(data).sort((a,b)=>a.localeCompare(b));
+
+  categoriasOrdenadas.forEach(c=>{
+    catSelect.innerHTML += `<option>${c}</option>`;
+
+    const produtos = Object.keys(data[c])
+      .filter(p => p.toLowerCase().includes(filtro))
+      .sort((a,b)=>a.localeCompare(b));
+
+    if(produtos.length === 0) return;
+
+    const box = document.createElement("div");
     box.className="box";
     box.innerHTML=`<h3>${c}
       <button onclick="editCategory('${c}')">✏️</button>
       <button onclick="deleteCategory('${c}')">🗑️</button>
     </h3>`;
 
-    for(let p in data[c]){
-      let q=data[c][p];
+    produtos.forEach(p=>{
+      const q=data[c][p];
       box.innerHTML+=`
       <div class="item">
         <span class="${q===0?'zero':q<=2?'low':''}">${p}: ${q}</span>
@@ -225,21 +203,16 @@ function render(){
           <button onclick="deleteProduct('${c}','${p}')">🗑️</button>
         </span>
       </div>`;
-    }
-    stock.appendChild(box);
-  }
+    });
 
-  document.getElementById("histAdd").innerHTML = histAdd.slice(0,30).join("<br>");
-  document.getElementById("histRem").innerHTML = histRem.slice(0,30).join("<br>");
+    stock.appendChild(box);
+  });
+
+  histAdd.innerHTML = histAdd.slice(0,30).join("<br>");
+  histRem.innerHTML = histRem.slice(0,30).join("<br>");
 }
 
 load();
-</script>
-
-<script>
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("service-worker.js");
-}
 </script>
 
 </body>
