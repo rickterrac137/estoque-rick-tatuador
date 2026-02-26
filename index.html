@@ -18,6 +18,7 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
 .highlight{background:#ffff99;border-radius:4px} /* destaque persistente */
+.footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
 </style>
 </head>
 
@@ -54,6 +55,9 @@ let user = prompt("Digite seu nome:");
 <div id="histRem"></div>
 </div>
 
+<!-- Rodapé dinâmico -->
+<div class="footer" id="footer"></div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -76,7 +80,7 @@ let data = {};
 let history = { adicoes: [], remocoes: [] };
 let lastFound = null; // elemento destacado da pesquisa
 
-/* 🔴 TEMPO REAL */
+/* 🔴 TEMPO REAL DO ESTOQUE */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
   if(snap.exists()) {
     data = snap.data().data || {};
@@ -91,6 +95,7 @@ onSnapshot(doc(db,"estoque","history"), snap=>{
   }
 });
 
+/* 🔴 CARREGAR DADOS INICIAIS */
 async function load(){
   const p = await getDoc(doc(db,"estoque","principal"));
   data = p.exists() && p.data().data ? p.data().data : {};
@@ -101,12 +106,13 @@ async function load(){
   render();
 }
 
+/* 🔴 SALVAR NO FIRESTORE */
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
   await setDoc(doc(db,"estoque","history"),history);
 }
 
-/* ➕ ADICIONAR */
+/* ➕ ADICIONAR PRODUTO */
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
@@ -122,7 +128,7 @@ window.addProduct = async ()=>{
   await save();
 };
 
-/* ➕➖ ALTERAR */
+/* ➕➖ ALTERAR QUANTIDADE */
 window.changeQty = async (cat, prod, delta)=>{
   data[cat][prod] += delta;
   if(data[cat][prod] < 0) data[cat][prod] = 0;
@@ -165,10 +171,8 @@ window.deleteProduct = async (cat,prod)=>{
 window.buscarProduto = ()=>{
   const termo = search.value.toLowerCase();
 
-  // remove destaque anterior
   if(lastFound) lastFound.classList.remove("highlight");
 
-  // procura produto
   const el = Array.from(document.querySelectorAll('[data-prod]'))
                   .find(d=>d.dataset.prod.includes(termo));
 
@@ -218,6 +222,30 @@ function renderHistory(){
 }
 
 load();
+
+/* 🏷️ RODAPÉ DINÂMICO COM VERSÃO AUTOMÁTICA DO FIRESTORE */
+async function loadAppVersion(){
+  const vDoc = await getDoc(doc(db,"config","version")); // documento Firestore
+  let version = "2.0.1"; // fallback
+  if(vDoc.exists() && vDoc.data().version) version = vDoc.data().version;
+
+  document.getElementById("footer").innerHTML = `
+    Versão do App: ${version}<br>
+    Criado por Denis Costa
+  `;
+}
+
+// Atualiza a versão em tempo real
+onSnapshot(doc(db,"config","version"), snap=>{
+  if(snap.exists() && snap.data().version){
+    document.getElementById("footer").innerHTML = `
+      Versão do App: ${snap.data().version}<br>
+      Criado por Denis Costa
+    `;
+  }
+});
+
+loadAppVersion();
 </script>
 
 </body>
