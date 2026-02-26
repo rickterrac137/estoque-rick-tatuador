@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
+<title>Estoque Rick Tatuador</title>
 
 <link rel="manifest" href="manifest.json">
 
@@ -12,23 +12,25 @@ body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
-button{font-size:16px}
+button{font-size:16px;cursor:pointer}
+button:active{transform:scale(0.97)}
 .item{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
-.footer{text-align:center;font-size:12px;color:#666;margin-top:20px}
 .tabs{display:flex;margin-bottom:10px}
 .tabs button{flex:1}
 .hidden{display:none}
 .highlight{background:#ffffcc}
+details summary{font-weight:bold;font-size:16px;cursor:pointer}
+.footer{text-align:center;font-size:12px;color:#666;margin-top:20px}
 </style>
 </head>
 
 <body>
 
 <script>
-const APP_VERSION = "v1.9.1";
+const APP_VERSION = "v2.0.0";
 let user = prompt("Digite seu nome:");
 </script>
 
@@ -44,7 +46,7 @@ let user = prompt("Digite seu nome:");
 
 <div class="box">
 <input id="search" placeholder="🔍 Pesquisar produto">
-<button onclick="buscarProduto()">Buscar</button>
+<button onclick="buscarProduto()">Buscar produto</button>
 </div>
 
 <div class="box">
@@ -52,7 +54,7 @@ let user = prompt("Digite seu nome:");
 <input id="newCat" placeholder="Ou nova categoria">
 <input id="newName" placeholder="Produto">
 <input id="newQty" type="number" placeholder="Quantidade">
-<button onclick="addProduct()">Adicionar</button>
+<button onclick="addProduct()">Adicionar produto</button>
 </div>
 
 <div id="stock"></div>
@@ -60,14 +62,15 @@ let user = prompt("Digite seu nome:");
 
 <!-- HISTÓRICO -->
 <div id="historicoTab" class="hidden">
-  <div class="box">
-    <h3>➕ Adições</h3>
+  <details open class="box">
+    <summary>➕ Adição de produtos</summary>
     <div id="histAdd"></div>
-  </div>
-  <div class="box">
-    <h3>➖ Remoções</h3>
+  </details>
+
+  <details class="box">
+    <summary>➖ Remoção de produtos</summary>
     <div id="histRem"></div>
-  </div>
+  </details>
 </div>
 
 <div class="footer">
@@ -93,24 +96,26 @@ let data = {};
 let histAdd = [];
 let histRem = [];
 
+/* ---------- TABS ---------- */
 function showTab(tab){
   estoqueTab.classList.toggle("hidden", tab !== "estoque");
   historicoTab.classList.toggle("hidden", tab !== "historico");
-  if(tab === "historico") renderHistory();
+  if(tab === "historico") renderHistory(true);
 }
 
 /* ---------- LOAD ---------- */
 async function load(){
-  const estoqueSnap = await db.collection("estoque").doc("principal").get();
-  data = estoqueSnap.exists ? estoqueSnap.data().data || {} : {};
+  const e = await db.collection("estoque").doc("principal").get();
+  data = e.exists ? e.data().data || {} : {};
 
-  const addSnap = await db.collection("estoque").doc("history_add").get();
-  histAdd = addSnap.exists ? addSnap.data().list || [] : [];
+  const a = await db.collection("estoque").doc("history_add").get();
+  histAdd = a.exists ? a.data().list || [] : [];
 
-  const remSnap = await db.collection("estoque").doc("history_rem").get();
-  histRem = remSnap.exists ? remSnap.data().list || [] : [];
+  const r = await db.collection("estoque").doc("history_rem").get();
+  histRem = r.exists ? r.data().list || [] : [];
 
-  render();
+  renderStock();
+  renderHistory();
 }
 
 /* ---------- SAVE ---------- */
@@ -118,77 +123,65 @@ async function saveEstoque(){
   await db.collection("estoque").doc("principal").set({data});
 }
 
-async function saveAdd(msg){
-  histAdd.unshift(msg);
-  await db.collection("estoque").doc("history_add").set({list:histAdd});
-  renderHistory();
-}
-
-async function saveRem(msg){
-  histRem.unshift(msg);
-  await db.collection("estoque").doc("history_rem").set({list:histRem});
-  renderHistory();
+async function saveHistory(type, msg){
+  const ref = db.collection("estoque").doc(type);
+  if(type === "history_add") histAdd.unshift(msg);
+  if(type === "history_rem") histRem.unshift(msg);
+  await ref.set({list: type==="history_add"?histAdd:histRem});
+  renderHistory(true);
 }
 
 /* ---------- ACTIONS ---------- */
 async function addProduct(){
   const prod = newName.value.trim();
   const qty = parseInt(newQty.value) || 0;
-  const category = newCat.value.trim() || catSelect.value;
+  const cat = newCat.value.trim() || catSelect.value;
 
-  if(!prod || !category) return alert("Preencha tudo");
+  if(!prod || !cat) return alert("Preencha tudo");
 
-  if(!data[category]) data[category] = {};
-  if(data[category][prod] !== undefined)
-    return alert("Produto já existe");
+  if(!data[cat]) data[cat] = {};
+  if(data[cat][prod] !== undefined) return alert("Produto já existe");
 
-  data[category][prod] = qty;
-
+  data[cat][prod] = qty;
   await saveEstoque();
-  await saveAdd(`➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
+  await saveHistory("history_add", `➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
 
   newName.value=newQty.value=newCat.value="";
-  render();
+  renderStock();
 }
 
 async function changeQty(c,p,d){
-  data[c][p] += d;
-  if(data[c][p] < 0) data[c][p] = 0;
+  data[c][p]+=d;
+  if(data[c][p]<0) data[c][p]=0;
 
   await saveEstoque();
+  await saveHistory(d>0?"history_add":"history_rem",
+    `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`);
 
-  const msg = `${d>0?"➕":"➖"} ${p} (${user}) - ${new Date().toLocaleString()}`;
-  d>0 ? await saveAdd(msg) : await saveRem(msg);
-
-  render();
+  renderStock();
 }
 
 /* ---------- SEARCH ---------- */
 function buscarProduto(){
-  const termo = search.value.toLowerCase();
-  if(!termo) return;
-
-  const el = document.querySelector(`[data-prod*="${termo}"]`);
+  const t = search.value.toLowerCase();
+  if(!t) return;
+  const el = document.querySelector(`[data-prod*="${t}"]`);
   if(el){
     el.classList.add("highlight");
     el.scrollIntoView({behavior:"smooth",block:"center"});
     setTimeout(()=>el.classList.remove("highlight"),2000);
-  } else {
-    alert("Produto não encontrado");
-  }
+  } else alert("Produto não encontrado");
 }
 
 /* ---------- RENDER ---------- */
-function render(){
+function renderStock(){
   stock.innerHTML="";
   catSelect.innerHTML="";
-
   Object.keys(data).sort().forEach(c=>{
     catSelect.innerHTML+=`<option>${c}</option>`;
     const box=document.createElement("div");
     box.className="box";
     box.innerHTML=`<h3>${c}</h3>`;
-
     Object.keys(data[c]).sort().forEach(p=>{
       const q=data[c][p];
       box.innerHTML+=`
@@ -204,9 +197,14 @@ function render(){
   });
 }
 
-function renderHistory(){
-  histAdd.innerHTML = histAdd.slice(0,40).map(h=>`<div>${h}</div>`).join("");
-  histRem.innerHTML = histRem.slice(0,40).map(h=>`<div>${h}</div>`).join("");
+function renderHistory(force=false){
+  histAdd.innerHTML = histAdd.length
+    ? histAdd.map(h=>`<div>${h}</div>`).join("")
+    : "<i>Nenhum registro</i>";
+
+  histRem.innerHTML = histRem.length
+    ? histRem.map(h=>`<div>${h}</div>`).join("")
+    : "<i>Nenhum registro</i>";
 }
 
 load();
