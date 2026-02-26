@@ -19,6 +19,8 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .low{color:orange;font-weight:bold}
 .highlight{background:#ffff99;border-radius:4px} /* destaque persistente */
 .footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
+.clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
+.clear-btn:hover{opacity:0.8}
 </style>
 </head>
 
@@ -48,11 +50,13 @@ let user = prompt("Digite seu nome:");
 <div class="box">
 <h3>📜 Histórico de Adições</h3>
 <div id="histAdd"></div>
+<button class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico de Adições</button>
 </div>
 
 <div class="box">
 <h3>📜 Histórico de Remoções</h3>
 <div id="histRem"></div>
+<button class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico de Remoções</button>
 </div>
 
 <!-- Rodapé dinâmico -->
@@ -78,9 +82,9 @@ const db = getFirestore(app);
 
 let data = {};
 let history = { adicoes: [], remocoes: [] };
-let lastFound = null; // elemento destacado da pesquisa
+let lastFound = null;
 
-/* 🔴 TEMPO REAL DO ESTOQUE */
+/* 🔴 TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
   if(snap.exists()) {
     data = snap.data().data || {};
@@ -221,11 +225,16 @@ function renderHistory(){
   histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
 }
 
-load();
+/* 🔴 LIMPAR HISTÓRICO */
+window.clearHistory = async(type)=>{
+  if(!confirm("Tem certeza que deseja limpar o histórico?")) return;
+  history[type] = [];
+  await save();
+};
 
-/* 🏷️ RODAPÉ DINÂMICO COM VERSÃO AUTOMÁTICA DO FIRESTORE */
+/* 🏷️ VERSÃO AUTOMÁTICA DO FIRESTORE */
 async function loadAppVersion(){
-  const vDoc = await getDoc(doc(db,"config","version")); // documento Firestore
+  const vDoc = await getDoc(doc(db,"config","version"));
   let version = "2.0.1"; // fallback
   if(vDoc.exists() && vDoc.data().version) version = vDoc.data().version;
 
@@ -235,7 +244,6 @@ async function loadAppVersion(){
   `;
 }
 
-// Atualiza a versão em tempo real
 onSnapshot(doc(db,"config","version"), snap=>{
   if(snap.exists() && snap.data().version){
     document.getElementById("footer").innerHTML = `
@@ -245,6 +253,7 @@ onSnapshot(doc(db,"config","version"), snap=>{
   }
 });
 
+load();
 loadAppVersion();
 </script>
 
