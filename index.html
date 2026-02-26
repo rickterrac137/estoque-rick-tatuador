@@ -28,7 +28,7 @@ button{font-size:16px}
 <body>
 
 <script>
-const APP_VERSION = "v1.7.1";
+const APP_VERSION = "v1.7.2";
 let user = prompt("Digite seu nome:");
 </script>
 
@@ -39,7 +39,6 @@ let user = prompt("Digite seu nome:");
   <button onclick="showTab('historico')">📜 Histórico</button>
 </div>
 
-<!-- ABA ESTOQUE -->
 <div id="estoqueTab">
 
 <div class="box">
@@ -57,7 +56,6 @@ let user = prompt("Digite seu nome:");
 <div id="stock"></div>
 </div>
 
-<!-- ABA HISTÓRICO -->
 <div id="historicoTab" class="hidden">
 <div class="box">
 <h3>➕ Adições</h3>
@@ -117,7 +115,6 @@ function showTab(tab){
 async function load(){
   const s = await db.collection("estoque").doc("principal").get();
   if(s.exists) data = s.data().data || {};
-
   const h = await db.collection("estoque").doc("history").get();
   if(h.exists){
     histAdd = h.data().add || [];
@@ -128,19 +125,39 @@ async function load(){
 
 async function save(){
   await db.collection("estoque").doc("principal").set({data});
-  await db.collection("estoque").doc("history").set({
-    add: histAdd,
-    rem: histRem
-  });
+  await db.collection("estoque").doc("history").set({add:histAdd,rem:histRem});
 }
 
+/* 🔧 FUNÇÃO CORRIGIDA */
 function addProduct(){
-  let cat = newCat.value || catSelect.value;
-  if(!cat || !newName.value) return alert("Preencha tudo");
-  if(!data[cat]) data[cat] = {};
-  data[cat][newName.value] = parseInt(newQty.value) || 0;
-  histAdd.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
-  save(); render();
+  const catInput = newCat.value.trim();
+  const selectedCat = catSelect.value;
+  const prod = newName.value.trim();
+  const qty = parseInt(newQty.value) || 0;
+
+  if(!prod) return alert("Digite o nome do produto");
+
+  let catFinal = "";
+
+  if(catInput){
+    catFinal = catInput;
+  } else if(selectedCat){
+    catFinal = selectedCat;
+  } else {
+    return alert("Selecione ou crie uma categoria");
+  }
+
+  if(!data[catFinal]) data[catFinal] = {};
+  data[catFinal][prod] = qty;
+
+  histAdd.unshift(`➕ ${prod} (${user}) - ${new Date().toLocaleString()}`);
+
+  newCat.value = "";
+  newName.value = "";
+  newQty.value = "";
+
+  save();
+  render();
 }
 
 function changeQty(c,p,d){
