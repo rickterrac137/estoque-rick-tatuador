@@ -5,11 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
 
-<link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-
 <style>
-body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px}
+body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px;transition:0.3s}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
@@ -17,10 +14,26 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
-.highlight{background:#ffff99;border-radius:4px} /* destaque persistente */
+.highlight{background:#ffff99;border-radius:4px}
 .footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
 .clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
 .clear-btn:hover{opacity:0.8}
+
+/* 🌙 MODO ESCURO */
+.dark{background:#121212;color:#f2f2f2}
+.dark .box{background:#1e1e1e}
+.dark input,.dark select,.dark button{
+background:#2a2a2a;color:white;border:1px solid #444
+}
+.update-alert{
+background:#ff9800;
+color:#000;
+padding:8px;
+border-radius:6px;
+margin-bottom:10px;
+cursor:pointer;
+font-weight:bold;
+}
 </style>
 </head>
 
@@ -31,6 +44,8 @@ let user = prompt("Digite seu nome:");
 </script>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
+
+<div id="updateBox"></div>
 
 <div class="box">
 <input id="search" placeholder="🔍 Pesquisar produto">
@@ -50,31 +65,29 @@ let user = prompt("Digite seu nome:");
 <div class="box">
 <h3>📜 Histórico de Adições</h3>
 <div id="histAdd"></div>
-<button class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico de Adições</button>
+<button class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico</button>
 </div>
 
 <div class="box">
 <h3>📜 Histórico de Remoções</h3>
 <div id="histRem"></div>
-<button class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico de Remoções</button>
+<button class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico</button>
 </div>
 
-<!-- Rodapé dinâmico -->
 <div class="footer" id="footer"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { 
-  getFirestore, doc, getDoc, setDoc, onSnapshot 
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
-  authDomain: "estoque-rick-tatuador.firebaseapp.com",
-  projectId: "estoque-rick-tatuador",
-  storageBucket: "estoque-rick-tatuador.firebasestorage.app",
-  messagingSenderId: "446550868475",
-  appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
+  apiKey: "SUA_KEY",
+  authDomain: "SUA_AUTH",
+  projectId: "SUA_PROJECT",
+  storageBucket: "SUA_BUCKET",
+  messagingSenderId: "SUA_ID",
+  appId: "SUA_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -86,111 +99,71 @@ let lastFound = null;
 
 /* 🔴 TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
-  if(snap.exists()) {
-    data = snap.data().data || {};
-    render();
-  }
+  if(snap.exists()){ data = snap.data().data || {}; render(); }
 });
-
 onSnapshot(doc(db,"estoque","history"), snap=>{
-  if(snap.exists()) {
-    history = snap.data();
-    renderHistory();
-  }
+  if(snap.exists()){ history = snap.data(); renderHistory(); }
 });
 
-/* 🔴 CARREGAR DADOS INICIAIS */
 async function load(){
   const p = await getDoc(doc(db,"estoque","principal"));
   data = p.exists() && p.data().data ? p.data().data : {};
-
   const h = await getDoc(doc(db,"estoque","history"));
   if(h.exists()) history = h.data();
-
   render();
 }
-
-/* 🔴 SALVAR NO FIRESTORE */
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
   await setDoc(doc(db,"estoque","history"),history);
 }
 
-/* ➕ ADICIONAR PRODUTO */
+/* FUNÇÕES */
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
-
-  data[cat][newName.value] = parseInt(newQty.value)||0;
-
-  history.adicoes.unshift(
-    `➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`
-  );
-
+  data[cat][newName.value]=parseInt(newQty.value)||0;
+  history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
   newCat.value=newName.value=newQty.value="";
   await save();
 };
-
-/* ➕➖ ALTERAR QUANTIDADE */
-window.changeQty = async (cat, prod, delta)=>{
-  data[cat][prod] += delta;
-  if(data[cat][prod] < 0) data[cat][prod] = 0;
-
-  const msg = `${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
-  delta>0 ? history.adicoes.unshift(msg) : history.remocoes.unshift(msg);
-
+window.changeQty = async (cat,prod,delta)=>{
+  data[cat][prod]+=delta;
+  if(data[cat][prod]<0) data[cat][prod]=0;
+  const msg=`${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
+  delta>0?history.adicoes.unshift(msg):history.remocoes.unshift(msg);
   await save();
 };
-
-/* ✏️🗑️ CATEGORIA */
 window.editCategory = async (cat)=>{
-  let n = prompt("Novo nome da categoria:", cat);
-  if(!n || n===cat) return;
+  let n=prompt("Novo nome:",cat);
+  if(!n||n===cat) return;
   data[n]=data[cat]; delete data[cat];
   await save();
 };
-
 window.deleteCategory = async (cat)=>{
-  if(!confirm("Excluir categoria inteira?")) return;
-  delete data[cat];
-  await save();
+  if(!confirm("Excluir categoria?")) return;
+  delete data[cat]; await save();
 };
-
-/* ✏️🗑️ PRODUTO */
 window.editProduct = async (cat,prod)=>{
-  let n = prompt("Novo nome do produto:", prod);
-  if(!n || n===prod) return;
+  let n=prompt("Novo nome:",prod);
+  if(!n||n===prod) return;
   data[cat][n]=data[cat][prod]; delete data[cat][prod];
   await save();
 };
-
 window.deleteProduct = async (cat,prod)=>{
   if(!confirm("Excluir produto?")) return;
-  delete data[cat][prod];
-  await save();
+  delete data[cat][prod]; await save();
 };
-
-/* 🔍 PESQUISA COM DESTAQUE PERSISTENTE */
 window.buscarProduto = ()=>{
-  const termo = search.value.toLowerCase();
-
+  const termo=search.value.toLowerCase();
   if(lastFound) lastFound.classList.remove("highlight");
-
-  const el = Array.from(document.querySelectorAll('[data-prod]'))
-                  .find(d=>d.dataset.prod.includes(termo));
-
+  const el=[...document.querySelectorAll('[data-prod]')]
+  .find(d=>d.dataset.prod.includes(termo));
   if(el){
-    el.scrollIntoView({behavior:"smooth", block:"center"});
-    el.classList.add("highlight");
-    lastFound = el;
-  } else {
-    alert("Produto não encontrado");
-    lastFound = null;
-  }
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    el.classList.add("highlight"); lastFound=el;
+  }else alert("Produto não encontrado");
 };
-
-/* 🎨 RENDER */
 function render(){
   stock.innerHTML=""; catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
@@ -198,63 +171,73 @@ function render(){
     let b=document.createElement("div");
     b.className="box";
     b.innerHTML=`<h3>${cat}
-      <button onclick="editCategory('${cat}')">✏️</button>
-      <button onclick="deleteCategory('${cat}')">🗑️</button>
-    </h3>`;
-
+    <button onclick="editCategory('${cat}')">✏️</button>
+    <button onclick="deleteCategory('${cat}')">🗑️</button></h3>`;
     Object.keys(data[cat]).forEach(p=>{
       let q=data[cat][p];
-      let cls = q===0?"zero":q<5?"low":"";
+      let cls=q===0?"zero":q<5?"low":"";
       b.innerHTML+=`
       <div class="item" data-prod="${p.toLowerCase()}">
-        <span class="${cls}">${p}: ${q}</span>
-        <span class="controls">
-          <button onclick="changeQty('${cat}','${p}',-1)">−</button>
-          <button onclick="changeQty('${cat}','${p}',1)">+</button>
-          <button onclick="editProduct('${cat}','${p}')">✏️</button>
-          <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
-        </span>
-      </div>`;
+      <span class="${cls}">${p}: ${q}</span>
+      <span class="controls">
+      <button onclick="changeQty('${cat}','${p}',-1)">−</button>
+      <button onclick="changeQty('${cat}','${p}',1)">+</button>
+      <button onclick="editProduct('${cat}','${p}')">✏️</button>
+      <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
+      </span></div>`;
     });
     stock.appendChild(b);
   });
 }
-
 function renderHistory(){
-  histAdd.innerHTML = history.adicoes.map(h=>`<div>${h}</div>`).join("");
-  histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
+  histAdd.innerHTML=history.adicoes.map(h=>`<div>${h}</div>`).join("");
+  histRem.innerHTML=history.remocoes.map(h=>`<div>${h}</div>`).join("");
 }
-
-/* 🔴 LIMPAR HISTÓRICO */
-window.clearHistory = async(type)=>{
-  if(!confirm("Tem certeza que deseja limpar o histórico?")) return;
-  history[type] = [];
-  await save();
+window.clearHistory=async(type)=>{
+  if(!confirm("Limpar histórico?")) return;
+  history[type]=[]; await save();
 };
 
-/* 🏷️ VERSÃO AUTOMÁTICA DO FIRESTORE */
-async function loadAppVersion(){
-  const vDoc = await getDoc(doc(db,"config","version"));
-  let version = "2.0.1"; // fallback
-  if(vDoc.exists() && vDoc.data().version) version = vDoc.data().version;
-
-  document.getElementById("footer").innerHTML = `
-    Versão do App: ${version}<br>
-    Criado por Denis Costa
-  `;
+/* 🌙 MODO ESCURO */
+function toggleDarkMode(){
+  document.body.classList.toggle("dark");
+  localStorage.setItem("darkMode",document.body.classList.contains("dark"));
+}
+if(localStorage.getItem("darkMode")==="true"){
+  document.body.classList.add("dark");
 }
 
-onSnapshot(doc(db,"config","version"), snap=>{
-  if(snap.exists() && snap.data().version){
-    document.getElementById("footer").innerHTML = `
-      Versão do App: ${snap.data().version}<br>
-      Criado por Denis Costa
-    `;
+/* 🔥 VERSÃO + DETECÇÃO AUTOMÁTICA */
+function gerarVersao(){
+  const n=new Date();
+  return `${n.getFullYear()}.${n.getMonth()+1}.${n.getDate()}.${n.getHours()}.${n.getMinutes()}`;
+}
+
+function verificarAtualizacao(){
+  const versaoAtual=gerarVersao();
+  const versaoSalva=localStorage.getItem("versaoApp");
+  if(versaoSalva && versaoSalva!==versaoAtual){
+    updateBox.innerHTML=`<div class="update-alert" onclick="location.reload()">Nova versão disponível. Clique para atualizar.</div>`;
   }
-});
+  localStorage.setItem("versaoApp",versaoAtual);
+}
+
+function atualizarRodape(){
+  footer.innerHTML=`
+  Última atualização: ${new Date().toLocaleString()}<br>
+  Versão: ${gerarVersao()}<br>
+  Criado por Denis Costa<br>`;
+  
+  const btn=document.createElement("button");
+  btn.innerText="🌙 Modo Escuro";
+  btn.onclick=toggleDarkMode;
+  footer.appendChild(btn);
+}
 
 load();
-loadAppVersion();
+atualizarRodape();
+verificarAtualizacao();
+
 </script>
 
 </body>
