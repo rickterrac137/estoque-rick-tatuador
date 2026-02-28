@@ -10,6 +10,8 @@ body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px;transition:0.3s}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
+button{cursor:pointer;transition:0.2s}
+button:active{transform:scale(0.95)}
 .item{display:flex;justify-content:space-between;align-items:center}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
@@ -18,34 +20,19 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
 .clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
 .clear-btn:hover{opacity:0.8}
-
 .dark{background:#121212;color:#f2f2f2}
 .dark .box{background:#1e1e1e}
-.dark input,.dark select,.dark button{
-background:#2a2a2a;color:white;border:1px solid #444
-}
-
-.update-alert{
-background:#ff9800;
-color:#000;
-padding:8px;
-border-radius:6px;
-margin-bottom:10px;
-cursor:pointer;
-font-weight:bold;
-}
+.dark input,.dark select,.dark button{background:#2a2a2a;color:white;border:1px solid #444}
+.update-alert{background:#ff9800;color:#000;padding:8px;border-radius:6px;margin-bottom:10px;cursor:pointer;font-weight:bold}
 </style>
 </head>
 
 <body>
 
-<script>
-let user = prompt("Digite seu nome:");
-</script>
+<div id="userBox" class="box"></div>
+<div id="updateBox"></div>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
-
-<div id="updateBox"></div>
 
 <div class="box">
 <input id="search" placeholder="🔍 Pesquisar produto">
@@ -63,25 +50,18 @@ let user = prompt("Digite seu nome:");
 <div id="stock"></div>
 
 <div class="box">
-<h3>📜 Histórico de Adições</h3>
-<div id="histAdd"></div>
-<button class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico</button>
-</div>
-
-<div class="box">
-<h3>📜 Histórico de Remoções</h3>
-<div id="histRem"></div>
-<button class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico</button>
+<h3>📜 Histórico de Ações</h3>
+<div id="histActions"></div>
+<button id="clearHistBtn" class="clear-btn" onclick="clearHistory()">Limpar Histórico</button>
 </div>
 
 <div class="footer" id="footer"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* 🔥 SUAS CREDENCIAIS CORRETAS */
+/* 🔥 Config Firebase */
 const firebaseConfig = {
   apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
   authDomain: "estoque-rick-tatuador.firebaseapp.com",
@@ -95,133 +75,139 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let data = {};
-let history = { adicoes: [], remocoes: [] };
+let history = [];
 let lastFound = null;
 
-/* 🔴 TEMPO REAL */
+// Login permanente
+let user = localStorage.getItem("usuarioLogado");
+if(!user){
+  user = prompt("Digite seu nome:");
+  if(!user) location.reload();
+  localStorage.setItem("usuarioLogado", user);
+}
+document.getElementById("userBox").innerHTML = `Usuário: ${user}`;
+
+// Limpar histórico apenas Rick
+if(user!=="Rick"){
+  document.getElementById("clearHistBtn").style.display="none";
+}
+
+/* 🔴 Tempo real */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
-  if(snap.exists()){ data = snap.data().data || {}; render(); }
+  if(snap.exists()){ data = snap.data().data || {}; renderStock(); }
 });
 onSnapshot(doc(db,"estoque","history"), snap=>{
-  if(snap.exists()){ history = snap.data(); renderHistory(); }
+  if(snap.exists()){ history = snap.data().actions || []; renderHistory(); }
 });
 
-async function load(){
-  const p = await getDoc(doc(db,"estoque","principal"));
-  data = p.exists() && p.data().data ? p.data().data : {};
-  const h = await getDoc(doc(db,"estoque","history"));
-  if(h.exists()) history = h.data();
-  render();
-}
+// Salvar
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
-  await setDoc(doc(db,"estoque","history"),history);
+  await setDoc(doc(db,"estoque","history"),{actions:history});
 }
 
+/* ➕ Adicionar produto */
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
   data[cat][newName.value]=parseInt(newQty.value)||0;
-  history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
+  history.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
   newCat.value=newName.value=newQty.value="";
   await save();
 };
 
+/* ➕➖ Alterar quantidade */
 window.changeQty = async (cat,prod,delta)=>{
   data[cat][prod]+=delta;
   if(data[cat][prod]<0) data[cat][prod]=0;
-  const msg=`${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
-  delta>0?history.adicoes.unshift(msg):history.remocoes.unshift(msg);
+  let msg = `${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
+  history.unshift(msg);
   await save();
 };
 
-window.editCategory = async (cat)=>{
-  let n=prompt("Novo nome:",cat);
+/* ✏️🗑️ Categoria/Produto */
+window.editCategory = async cat=>{
+  let n = prompt("Novo nome da categoria:",cat);
   if(!n||n===cat) return;
   data[n]=data[cat]; delete data[cat];
   await save();
 };
-
-window.deleteCategory = async (cat)=>{
+window.deleteCategory = async cat=>{
   if(!confirm("Excluir categoria?")) return;
   delete data[cat]; await save();
 };
-
 window.editProduct = async (cat,prod)=>{
-  let n=prompt("Novo nome:",prod);
+  let n = prompt("Novo nome do produto:",prod);
   if(!n||n===prod) return;
   data[cat][n]=data[cat][prod]; delete data[cat][prod];
   await save();
 };
-
 window.deleteProduct = async (cat,prod)=>{
   if(!confirm("Excluir produto?")) return;
   delete data[cat][prod]; await save();
 };
 
+/* 🔍 Pesquisa com destaque */
 window.buscarProduto = ()=>{
-  const termo=search.value.toLowerCase();
+  const termo = search.value.toLowerCase();
   if(lastFound) lastFound.classList.remove("highlight");
-  const el=[...document.querySelectorAll('[data-prod]')]
-  .find(d=>d.dataset.prod.includes(termo));
-  if(el){
-    el.scrollIntoView({behavior:"smooth",block:"center"});
-    el.classList.add("highlight"); lastFound=el;
-  }else alert("Produto não encontrado");
+  const el = [...document.querySelectorAll('[data-prod]')].find(d=>d.dataset.prod.includes(termo));
+  if(el){ el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("highlight"); lastFound=el; }
+  else alert("Produto não encontrado");
 };
 
-function render(){
+/* 🎨 Render estoque */
+function renderStock(){
   stock.innerHTML=""; catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
-    let b=document.createElement("div");
-    b.className="box";
-    b.innerHTML=`<h3>${cat}
-    <button onclick="editCategory('${cat}')">✏️</button>
-    <button onclick="deleteCategory('${cat}')">🗑️</button></h3>`;
+    let box=document.createElement("div");
+    box.className="box";
+    box.innerHTML=`<h3>${cat}
+      <button onclick="editCategory('${cat}')">✏️</button>
+      <button onclick="deleteCategory('${cat}')">🗑️</button>
+    </h3>`;
     Object.keys(data[cat]).forEach(p=>{
       let q=data[cat][p];
       let cls=q===0?"zero":q<5?"low":"";
-      b.innerHTML+=`
+      box.innerHTML+=`
       <div class="item" data-prod="${p.toLowerCase()}">
-      <span class="${cls}">${p}: ${q}</span>
-      <span class="controls">
-      <button onclick="changeQty('${cat}','${p}',-1)">−</button>
-      <button onclick="changeQty('${cat}','${p}',1)">+</button>
-      <button onclick="editProduct('${cat}','${p}')">✏️</button>
-      <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
-      </span></div>`;
+        <span class="${cls}">${p}: ${q}</span>
+        <span class="controls">
+          <button onclick="changeQty('${cat}','${p}',-1)">−</button>
+          <button onclick="changeQty('${cat}','${p}',1)">+</button>
+          <button onclick="editProduct('${cat}','${p}')">✏️</button>
+          <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
+        </span>
+      </div>`;
     });
-    stock.appendChild(b);
+    stock.appendChild(box);
   });
 }
 
+/* 🎨 Render histórico */
 function renderHistory(){
-  histAdd.innerHTML=history.adicoes.map(h=>`<div>${h}</div>`).join("");
-  histRem.innerHTML=history.remocoes.map(h=>`<div>${h}</div>`).join("");
+  histActions.innerHTML = history.map(h=>`<div>${h}</div>`).join("");
 }
 
-window.clearHistory=async(type)=>{
+/* 🔴 Limpar histórico */
+window.clearHistory = async ()=>{
+  if(user!=="Rick") return;
   if(!confirm("Limpar histórico?")) return;
-  history[type]=[]; await save();
+  history=[];
+  await save();
 };
 
-/* 🌙 DARK MODE */
+/* 🌙 Dark mode */
 function toggleDarkMode(){
   document.body.classList.toggle("dark");
   localStorage.setItem("darkMode",document.body.classList.contains("dark"));
 }
-if(localStorage.getItem("darkMode")==="true"){
-  document.body.classList.add("dark");
-}
+if(localStorage.getItem("darkMode")==="true") document.body.classList.add("dark");
 
-/* 🔥 VERSÃO AUTOMÁTICA */
-function gerarVersao(){
-  const n=new Date();
-  return `${n.getFullYear()}.${n.getMonth()+1}.${n.getDate()}.${n.getHours()}.${n.getMinutes()}`;
-}
-
+/* ⚡ Versão automática e alerta atualização */
+function gerarVersao(){ const n=new Date(); return `${n.getFullYear()}.${n.getMonth()+1}.${n.getDate()}.${n.getHours()}.${n.getMinutes()}`; }
 function verificarAtualizacao(){
   const versaoAtual=gerarVersao();
   const versaoSalva=localStorage.getItem("versaoApp");
@@ -230,13 +216,10 @@ function verificarAtualizacao(){
   }
   localStorage.setItem("versaoApp",versaoAtual);
 }
-
 function atualizarRodape(){
-  footer.innerHTML=`
-  Última atualização: ${new Date().toLocaleString()}<br>
+  footer.innerHTML=`Última atualização: ${new Date().toLocaleString()}<br>
   Versão: ${gerarVersao()}<br>
   Criado por Denis Costa<br>`;
-  
   const btn=document.createElement("button");
   btn.innerText="🌙 Modo Escuro";
   btn.onclick=toggleDarkMode;
@@ -248,6 +231,5 @@ atualizarRodape();
 verificarAtualizacao();
 
 </script>
-
 </body>
 </html>
