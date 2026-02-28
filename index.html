@@ -4,10 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px;transition:0.3s}
+.dark{background:#121212;color:white}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
+.dark .box{background:#1e1e1e}
 input,select,button{width:100%;padding:8px;margin:4px 0}
 button{cursor:pointer;transition:0.2s}
 button:active{transform:scale(0.95)}
@@ -16,21 +22,18 @@ button:active{transform:scale(0.95)}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
 .highlight{background:#ffff99;border-radius:4px}
-.footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
-.clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
-.clear-btn:hover{opacity:0.8}
-.dark{background:#121212;color:#f2f2f2}
-.dark .box{background:#1e1e1e}
-.dark input,.dark select,.dark button{background:#2a2a2a;color:white;border:1px solid #444}
-.update-alert{background:#ff9800;color:#000;padding:8px;border-radius:6px;margin-bottom:10px;cursor:pointer;font-weight:bold}
+.footer{text-align:center;margin-top:20px;font-size:14px;color:#666}
+.dark .footer{color:#aaa}
+.userBox{text-align:center;margin-bottom:10px;font-weight:bold}
 </style>
 </head>
+
 <body>
 
-<div id="userBox" class="box"></div>
-<div id="updateBox"></div>
-
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
+
+<div class="userBox" id="userBox"></div>
+<button onclick="logout()">🚪 Sair</button>
 
 <div class="box">
 <input id="search" placeholder="🔍 Pesquisar produto">
@@ -48,24 +51,21 @@ button:active{transform:scale(0.95)}
 <div id="stock"></div>
 
 <div class="box">
-<h3>📜 Histórico de Adições</h3>
+<h3>📜 Histórico</h3>
 <div id="histAdd"></div>
-<button id="clearHistBtnAdd" class="clear-btn">Limpar Histórico</button>
-</div>
-
-<div class="box">
-<h3>📜 Histórico de Remoções</h3>
-<div id="histRem"></div>
-<button id="clearHistBtnRem" class="clear-btn">Limpar Histórico</button>
+<button onclick="clearHistory()">Limpar Histórico</button>
 </div>
 
 <div class="footer" id="footer"></div>
 
+<!-- 🔽 BOTÃO MODO ESCURO AGORA NO FINAL -->
+<button onclick="toggleDark()">🌙 Alternar Modo Escuro</button>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* 🔥 Firebase config */
 const firebaseConfig = {
   apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
   authDomain: "estoque-rick-tatuador.firebaseapp.com",
@@ -74,50 +74,58 @@ const firebaseConfig = {
   messagingSenderId: "446550868475",
   appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-/* Variáveis globais */
 let data = {};
-let history = { adicoes: [], remocoes: [] };
+let history = {};
+let user = null;
 let lastFound = null;
 
-/* Inputs */
-const newCat = document.getElementById("newCat");
-const newName = document.getElementById("newName");
-const newQty = document.getElementById("newQty");
-const catSelect = document.getElementById("catSelect");
-const search = document.getElementById("search");
-const clearHistBtnAdd = document.getElementById("clearHistBtnAdd");
-const clearHistBtnRem = document.getElementById("clearHistBtnRem");
+/* LOGIN */
+async function login(){
+  user = localStorage.getItem("usuarioLogado");
 
-/* Login obrigatório */
-let user = localStorage.getItem("usuarioLogado");
-while(!user){
-  user = prompt("Digite seu nome de usuário:");
-  if(user) localStorage.setItem("usuarioLogado", user);
+  if(!user){
+    const nome = prompt("Digite seu nome:");
+    if(!nome) return login();
+
+    const userDoc = await getDoc(doc(db,"usuarios",nome));
+    if(!userDoc.exists()){
+      if(confirm("Usuário não cadastrado. Deseja cadastrar?")){
+        await setDoc(doc(db,"usuarios",nome),{
+          criadoEm:new Date().toLocaleString()
+        });
+        alert("Usuário cadastrado!");
+      }else{
+        return login();
+      }
+    }
+    localStorage.setItem("usuarioLogado",nome);
+    user = nome;
+  }
+
+  document.getElementById("userBox").innerHTML =
+  `Usuário: ${user}`;
 }
-document.getElementById("userBox").innerHTML = `Usuário logado: <b>${user}</b>`;
 
-/* Apenas Rick pode limpar histórico */
-if(user!=="Rick"){
-  clearHistBtnAdd.style.display="none";
-  clearHistBtnRem.style.display="none";
-} else {
-  clearHistBtnAdd.onclick = ()=>clearHistory('adicoes');
-  clearHistBtnRem.onclick = ()=>clearHistory('remocoes');
-}
+window.logout = ()=>{
+  localStorage.removeItem("usuarioLogado");
+  location.reload();
+};
 
-/* Funções Firestore */
+/* TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
-  if(snap.exists()){ 
-    data = snap.data().data || {}; 
-    renderStock();
+  if(snap.exists()){
+    data = snap.data().data || {};
+    render();
   }
 });
+
 onSnapshot(doc(db,"estoque","history"), snap=>{
-  if(snap.exists()){ 
-    history = snap.data() || {adicoes:[],remocoes:[]}; 
+  if(snap.exists()){
+    history = snap.data();
     renderHistory();
   }
 });
@@ -127,132 +135,138 @@ async function save(){
   await setDoc(doc(db,"estoque","history"),history);
 }
 
-/* ➕ Adicionar produto */
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
+
   data[cat][newName.value] = parseInt(newQty.value)||0;
-  history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
-  newCat.value = newName.value = newQty.value = "";
+
+  if(!history[user]) history[user]=[];
+  history[user].unshift(`➕ ${newName.value} - ${new Date().toLocaleString()}`);
+
+  newCat.value=newName.value=newQty.value="";
   await save();
-  renderStock(); renderHistory();
 };
 
-/* ➕➖ Alterar quantidade */
 window.changeQty = async (cat,prod,delta)=>{
-  data[cat][prod] = (data[cat][prod]||0)+delta;
+  data[cat][prod]+=delta;
   if(data[cat][prod]<0) data[cat][prod]=0;
-  const msg = `${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
-  delta>0 ? history.adicoes.unshift(msg) : history.remocoes.unshift(msg);
+
+  if(!history[user]) history[user]=[];
+  history[user].unshift(
+    `${delta>0?'➕':'➖'} ${prod} - ${new Date().toLocaleString()}`
+  );
+
   await save();
-  renderStock(); renderHistory();
 };
 
-/* ✏️🗑️ Categoria/Produto */
-window.editCategory = async cat=>{
-  let n = prompt("Novo nome da categoria:",cat);
-  if(!n||n===cat) return;
+window.editCategory = async (cat)=>{
+  let n = prompt("Novo nome da categoria:", cat);
+  if(!n || n===cat) return;
   data[n]=data[cat]; delete data[cat];
-  await save(); renderStock();
+  await save();
 };
-window.deleteCategory = async cat=>{
-  if(!confirm("Excluir categoria?")) return;
-  delete data[cat]; await save(); renderStock();
+
+window.deleteCategory = async (cat)=>{
+  if(!confirm("Excluir categoria inteira?")) return;
+  delete data[cat];
+  await save();
 };
+
 window.editProduct = async (cat,prod)=>{
-  let n = prompt("Novo nome do produto:",prod);
-  if(!n||n===prod) return;
+  let n = prompt("Novo nome do produto:", prod);
+  if(!n || n===prod) return;
   data[cat][n]=data[cat][prod]; delete data[cat][prod];
-  await save(); renderStock();
+  await save();
 };
+
 window.deleteProduct = async (cat,prod)=>{
   if(!confirm("Excluir produto?")) return;
-  delete data[cat][prod]; await save(); renderStock();
+  delete data[cat][prod];
+  await save();
 };
 
-/* 🔍 Pesquisar */
 window.buscarProduto = ()=>{
   const termo = search.value.toLowerCase();
   if(lastFound) lastFound.classList.remove("highlight");
-  const el = [...document.querySelectorAll('[data-prod]')].find(d=>d.dataset.prod.includes(termo));
-  if(el){ el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("highlight"); lastFound=el; }
-  else alert("Produto não encontrado");
+
+  const el = Array.from(document.querySelectorAll('[data-prod]'))
+  .find(d=>d.dataset.prod.includes(termo));
+
+  if(el){
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    el.classList.add("highlight");
+    lastFound=el;
+  }else alert("Produto não encontrado");
 };
 
-/* Render estoque */
-function renderStock(){
-  stock.innerHTML=""; catSelect.innerHTML="";
+function render(){
+  stock.innerHTML="";
+  catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
-    let box=document.createElement("div");
-    box.className="box";
-    box.innerHTML=`<h3>${cat}
-      <button onclick="editCategory('${cat}')">✏️</button>
-      <button onclick="deleteCategory('${cat}')">🗑️</button>
+    let b=document.createElement("div");
+    b.className="box";
+    b.innerHTML=`<h3>${cat}
+    <button onclick="editCategory('${cat}')">✏️</button>
+    <button onclick="deleteCategory('${cat}')">🗑️</button>
     </h3>`;
+
     Object.keys(data[cat]).forEach(p=>{
       let q=data[cat][p];
       let cls=q===0?"zero":q<5?"low":"";
-      box.innerHTML+=`
+      b.innerHTML+=`
       <div class="item" data-prod="${p.toLowerCase()}">
-        <span class="${cls}">${p}: ${q}</span>
-        <span class="controls">
-          <button onclick="changeQty('${cat}','${p}',-1)">−</button>
-          <button onclick="changeQty('${cat}','${p}',1)">+</button>
-          <button onclick="editProduct('${cat}','${p}')">✏️</button>
-          <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
-        </span>
+      <span class="${cls}">${p}: ${q}</span>
+      <span class="controls">
+      <button onclick="changeQty('${cat}','${p}',-1)">−</button>
+      <button onclick="changeQty('${cat}','${p}',1)">+</button>
+      <button onclick="editProduct('${cat}','${p}')">✏️</button>
+      <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
+      </span>
       </div>`;
     });
-    stock.appendChild(box);
+    stock.appendChild(b);
   });
 }
 
-/* Render histórico */
 function renderHistory(){
-  histAdd.innerHTML = history.adicoes.map(h=>`<div>${h}</div>`).join("");
-  histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
+  histAdd.innerHTML="";
+  if(history[user]){
+    histAdd.innerHTML = history[user].map(h=>`<div>${h}</div>`).join("");
+  }
 }
 
-/* Limpar histórico */
-async function clearHistory(tipo){
-  if(user!=="Rick") return;
-  if(!confirm("Limpar histórico?")) return;
-  if(tipo==="adicoes") history.adicoes=[];
-  if(tipo==="remocoes") history.remocoes=[];
-  await save(); renderHistory();
-}
+window.clearHistory = async ()=>{
+  if(!confirm("Tem certeza que deseja limpar o histórico?")) return;
+  history[user]=[];
+  await save();
+};
 
-/* 🌙 Dark mode */
-function toggleDarkMode(){
+window.toggleDark = ()=>{
   document.body.classList.toggle("dark");
   localStorage.setItem("darkMode",document.body.classList.contains("dark"));
-}
-if(localStorage.getItem("darkMode")==="true") document.body.classList.add("dark");
+};
 
-/* Versão automática e atualização */
-function gerarVersao(){ const n=new Date(); return `${n.getFullYear()}.${n.getMonth()+1}.${n.getDate()}.${n.getHours()}.${n.getMinutes()}`; }
-function verificarAtualizacao(){
-  const versaoAtual=gerarVersao();
-  const versaoSalva=localStorage.getItem("versaoApp");
-  if(versaoSalva && versaoSalva!==versaoAtual){
-    updateBox.innerHTML=`<div class="update-alert" onclick="location.reload()">Nova versão disponível. Clique para atualizar.</div>`;
-  }
-  localStorage.setItem("versaoApp",versaoAtual);
-}
-function atualizarRodape(){
-  footer.innerHTML=`Última atualização: ${new Date().toLocaleString()}<br>
-  Versão: ${gerarVersao()}<br>
-  Criado por Denis Costa<br>`;
-  const btn=document.createElement("button");
-  btn.innerText="🌙 Modo Escuro";
-  btn.onclick=toggleDarkMode;
-  footer.appendChild(btn);
+if(localStorage.getItem("darkMode")==="true"){
+  document.body.classList.add("dark");
 }
 
-atualizarRodape();
-verificarAtualizacao();
+function updateFooter(){
+  const now = new Date();
+  document.getElementById("footer").innerHTML=`
+  Versão automática<br>
+  Última atualização: ${now.toLocaleString()}<br><br>
+  Usuário ativo: ${user}<br><br>
+  Criado por Denis Costa
+  `;
+}
+
+await login();
+updateFooter();
 </script>
+
 </body>
 </html>
+
