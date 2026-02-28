@@ -5,34 +5,47 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
 
-<link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px;transition:0.3s}
-.dark{background:#121212;color:white}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
-.dark .box{background:#1e1e1e}
 input,select,button{width:100%;padding:8px;margin:4px 0}
-button{cursor:pointer;transition:0.2s}
-button:active{transform:scale(0.95)}
 .item{display:flex;justify-content:space-between;align-items:center}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
 .highlight{background:#ffff99;border-radius:4px}
-.footer{text-align:center;margin-top:20px;font-size:14px;color:#555}
-.dark .footer{color:#aaa}
-.clear-btn{background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
+.footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
+.clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
+.clear-btn:hover{opacity:0.8}
+
+.dark{background:#121212;color:#f2f2f2}
+.dark .box{background:#1e1e1e}
+.dark input,.dark select,.dark button{
+background:#2a2a2a;color:white;border:1px solid #444
+}
+
+.update-alert{
+background:#ff9800;
+color:#000;
+padding:8px;
+border-radius:6px;
+margin-bottom:10px;
+cursor:pointer;
+font-weight:bold;
+}
 </style>
 </head>
 
 <body>
 
+<script>
+let user = prompt("Digite seu nome:");
+</script>
+
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
 
-<div id="userBox" class="box"></div>
+<div id="updateBox"></div>
 
 <div class="box">
 <input id="search" placeholder="🔍 Pesquisar produto">
@@ -52,17 +65,13 @@ button:active{transform:scale(0.95)}
 <div class="box">
 <h3>📜 Histórico de Adições</h3>
 <div id="histAdd"></div>
-<button id="clearAddBtn" class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico de Adições</button>
+<button class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico</button>
 </div>
 
 <div class="box">
 <h3>📜 Histórico de Remoções</h3>
 <div id="histRem"></div>
-<button id="clearRemBtn" class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico de Remoções</button>
-</div>
-
-<div class="box">
-<button onclick="toggleDarkMode()">🌙 Modo Escuro</button>
+<button class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico</button>
 </div>
 
 <div class="footer" id="footer"></div>
@@ -72,13 +81,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } 
 from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+/* 🔥 SUAS CREDENCIAIS CORRETAS */
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY",
-  authDomain: "SEU_AUTH_DOMAIN",
-  projectId: "SEU_PROJECT_ID",
-  storageBucket: "SEU_BUCKET",
-  messagingSenderId: "SEU_MSG_ID",
-  appId: "SEU_APP_ID"
+  apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
+  authDomain: "estoque-rick-tatuador.firebaseapp.com",
+  projectId: "estoque-rick-tatuador",
+  storageBucket: "estoque-rick-tatuador.firebasestorage.app",
+  messagingSenderId: "446550868475",
+  appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -86,48 +96,34 @@ const db = getFirestore(app);
 
 let data = {};
 let history = { adicoes: [], remocoes: [] };
-let currentUser = localStorage.getItem("usuarioLogado");
 let lastFound = null;
-
-// Login usuário
-if(!currentUser){
-  let nome = prompt("Digite seu nome:");
-  if(!nome) location.reload();
-  localStorage.setItem("usuarioLogado", nome);
-  currentUser = nome;
-}
-
-document.getElementById("userBox").innerHTML = `Usuário: ${currentUser}`;
-if(currentUser!=="Rick"){ 
-  document.getElementById("clearAddBtn").style.display="none";
-  document.getElementById("clearRemBtn").style.display="none";
-}
 
 /* 🔴 TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
-  if(snap.exists()) data = snap.data().data || {};
-  renderStock();
+  if(snap.exists()){ data = snap.data().data || {}; render(); }
 });
-
 onSnapshot(doc(db,"estoque","history"), snap=>{
-  if(snap.exists()) history = snap.data() || { adicoes: [], remocoes: [] };
-  renderHistory();
+  if(snap.exists()){ history = snap.data(); renderHistory(); }
 });
 
+async function load(){
+  const p = await getDoc(doc(db,"estoque","principal"));
+  data = p.exists() && p.data().data ? p.data().data : {};
+  const h = await getDoc(doc(db,"estoque","history"));
+  if(h.exists()) history = h.data();
+  render();
+}
 async function save(){
-  await setDoc(doc(db,"estoque","principal"), {data});
-  await setDoc(doc(db,"estoque","history"), history);
+  await setDoc(doc(db,"estoque","principal"),{data});
+  await setDoc(doc(db,"estoque","history"),history);
 }
 
-/* ➕➖ ADICIONAR/REMOVER */
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
-  data[cat][newName.value] = parseInt(newQty.value)||0;
-
-  history.adicoes.unshift(`➕ ${newName.value} — ${currentUser} — ${new Date().toLocaleString()}`);
-
+  data[cat][newName.value]=parseInt(newQty.value)||0;
+  history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
   newCat.value=newName.value=newQty.value="";
   await save();
 };
@@ -135,113 +131,122 @@ window.addProduct = async ()=>{
 window.changeQty = async (cat,prod,delta)=>{
   data[cat][prod]+=delta;
   if(data[cat][prod]<0) data[cat][prod]=0;
-
-  let entry = `${delta>0?'➕':'➖'} ${prod} — ${currentUser} — ${new Date().toLocaleString()}`;
-  if(delta>0) history.adicoes.unshift(entry);
-  else history.remocoes.unshift(entry);
-
+  const msg=`${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
+  delta>0?history.adicoes.unshift(msg):history.remocoes.unshift(msg);
   await save();
 };
 
-/* ✏️🗑️ CATEGORIA / PRODUTO */
 window.editCategory = async (cat)=>{
-  let n = prompt("Novo nome da categoria:", cat);
-  if(!n || n===cat) return;
+  let n=prompt("Novo nome:",cat);
+  if(!n||n===cat) return;
   data[n]=data[cat]; delete data[cat];
   await save();
 };
 
 window.deleteCategory = async (cat)=>{
-  if(!confirm("Excluir categoria inteira?")) return;
-  delete data[cat];
-  await save();
+  if(!confirm("Excluir categoria?")) return;
+  delete data[cat]; await save();
 };
 
 window.editProduct = async (cat,prod)=>{
-  let n = prompt("Novo nome do produto:", prod);
-  if(!n || n===prod) return;
+  let n=prompt("Novo nome:",prod);
+  if(!n||n===prod) return;
   data[cat][n]=data[cat][prod]; delete data[cat][prod];
   await save();
 };
 
 window.deleteProduct = async (cat,prod)=>{
   if(!confirm("Excluir produto?")) return;
-  delete data[cat][prod];
-  await save();
+  delete data[cat][prod]; await save();
 };
 
-/* 🔍 PESQUISA */
 window.buscarProduto = ()=>{
-  const termo = search.value.toLowerCase();
+  const termo=search.value.toLowerCase();
   if(lastFound) lastFound.classList.remove("highlight");
-
-  const el = Array.from(document.querySelectorAll('[data-prod]'))
-    .find(d=>d.dataset.prod.includes(termo));
-
+  const el=[...document.querySelectorAll('[data-prod]')]
+  .find(d=>d.dataset.prod.includes(termo));
   if(el){
-    el.scrollIntoView({behavior:"smooth", block:"center"});
-    el.classList.add("highlight");
-    lastFound = el;
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    el.classList.add("highlight"); lastFound=el;
   }else alert("Produto não encontrado");
 };
 
-/* 🎨 RENDER ESTOQUE */
-function renderStock(){
+function render(){
   stock.innerHTML=""; catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
-    let box = document.createElement("div");
-    box.className="box";
-    box.innerHTML=`<h3>${cat}
-      <button onclick="editCategory('${cat}')">✏️</button>
-      <button onclick="deleteCategory('${cat}')">🗑️</button>
-    </h3>`;
+    let b=document.createElement("div");
+    b.className="box";
+    b.innerHTML=`<h3>${cat}
+    <button onclick="editCategory('${cat}')">✏️</button>
+    <button onclick="deleteCategory('${cat}')">🗑️</button></h3>`;
     Object.keys(data[cat]).forEach(p=>{
-      let q = data[cat][p];
-      let cls = q===0?"zero":q<5?"low":"";
-      box.innerHTML+=`
+      let q=data[cat][p];
+      let cls=q===0?"zero":q<5?"low":"";
+      b.innerHTML+=`
       <div class="item" data-prod="${p.toLowerCase()}">
-        <span class="${cls}">${p}: ${q}</span>
-        <span class="controls">
-          <button onclick="changeQty('${cat}','${p}',-1)">−</button>
-          <button onclick="changeQty('${cat}','${p}',1)">+</button>
-          <button onclick="editProduct('${cat}','${p}')">✏️</button>
-          <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
-        </span>
-      </div>`;
+      <span class="${cls}">${p}: ${q}</span>
+      <span class="controls">
+      <button onclick="changeQty('${cat}','${p}',-1)">−</button>
+      <button onclick="changeQty('${cat}','${p}',1)">+</button>
+      <button onclick="editProduct('${cat}','${p}')">✏️</button>
+      <button onclick="deleteProduct('${cat}','${p}')">🗑️</button>
+      </span></div>`;
     });
-    stock.appendChild(box);
+    stock.appendChild(b);
   });
 }
 
-/* 🎨 RENDER HISTÓRICO */
 function renderHistory(){
-  histAdd.innerHTML = history.adicoes.map(h=>`<div>${h}</div>`).join("");
-  histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
+  histAdd.innerHTML=history.adicoes.map(h=>`<div>${h}</div>`).join("");
+  histRem.innerHTML=history.remocoes.map(h=>`<div>${h}</div>`).join("");
 }
 
-/* 🔴 LIMPAR HISTÓRICO */
-window.clearHistory = async (type)=>{
-  if(currentUser!=="Rick") return;
-  if(!confirm("Tem certeza que deseja limpar o histórico?")) return;
-  history[type] = [];
-  await save();
+window.clearHistory=async(type)=>{
+  if(!confirm("Limpar histórico?")) return;
+  history[type]=[]; await save();
 };
 
-/* 🌙 MODO ESCURO */
-window.toggleDarkMode = ()=>{
+/* 🌙 DARK MODE */
+function toggleDarkMode(){
   document.body.classList.toggle("dark");
-  localStorage.setItem("darkMode", document.body.classList.contains("dark"));
-};
-if(localStorage.getItem("darkMode")==="true") document.body.classList.add("dark");
-
-/* ⚡ VERSÃO AUTOMÁTICA */
-async function loadVersion(){
-  const vDoc = await getDoc(doc(db,"config","version"));
-  let version = vDoc.exists()?vDoc.data().version:"2.0.1";
-  footer.innerHTML = `Versão do App: ${version}<br>Atualizado em: ${new Date().toLocaleString()}<br>Criado por Denis Costa`;
+  localStorage.setItem("darkMode",document.body.classList.contains("dark"));
 }
-loadVersion();
+if(localStorage.getItem("darkMode")==="true"){
+  document.body.classList.add("dark");
+}
+
+/* 🔥 VERSÃO AUTOMÁTICA */
+function gerarVersao(){
+  const n=new Date();
+  return `${n.getFullYear()}.${n.getMonth()+1}.${n.getDate()}.${n.getHours()}.${n.getMinutes()}`;
+}
+
+function verificarAtualizacao(){
+  const versaoAtual=gerarVersao();
+  const versaoSalva=localStorage.getItem("versaoApp");
+  if(versaoSalva && versaoSalva!==versaoAtual){
+    updateBox.innerHTML=`<div class="update-alert" onclick="location.reload()">Nova versão disponível. Clique para atualizar.</div>`;
+  }
+  localStorage.setItem("versaoApp",versaoAtual);
+}
+
+function atualizarRodape(){
+  footer.innerHTML=`
+  Última atualização: ${new Date().toLocaleString()}<br>
+  Versão: ${gerarVersao()}<br>
+  Criado por Denis Costa<br>`;
+  
+  const btn=document.createElement("button");
+  btn.innerText="🌙 Modo Escuro";
+  btn.onclick=toggleDarkMode;
+  footer.appendChild(btn);
+}
+
+load();
+atualizarRodape();
+verificarAtualizacao();
+
 </script>
 
 </body>
