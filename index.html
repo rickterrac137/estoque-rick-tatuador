@@ -50,16 +50,23 @@ button:active{transform:scale(0.95)}
 <div id="stock"></div>
 
 <div class="box">
-<h3>📜 Histórico de Ações</h3>
-<div id="histActions"></div>
-<button id="clearHistBtn" class="clear-btn" onclick="clearHistory()">Limpar Histórico</button>
+<h3>📜 Histórico de Adições</h3>
+<div id="histAdd"></div>
+<button id="clearHistBtnAdd" class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico</button>
+</div>
+
+<div class="box">
+<h3>📜 Histórico de Remoções</h3>
+<div id="histRem"></div>
+<button id="clearHistBtnRem" class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico</button>
 </div>
 
 <div class="footer" id="footer"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 /* 🔥 Config Firebase */
 const firebaseConfig = {
@@ -75,58 +82,78 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let data = {};
-let history = [];
+let history = { adicoes: [], remocoes: [] };
 let lastFound = null;
 
-// Login permanente
+// 🔒 Login obrigatório
 let user = localStorage.getItem("usuarioLogado");
-if(!user){
-  user = prompt("Digite seu nome:");
-  if(!user) location.reload();
-  localStorage.setItem("usuarioLogado", user);
+while(!user){
+  user = prompt("Digite seu nome de usuário:");
+  if(user) localStorage.setItem("usuarioLogado", user);
 }
-document.getElementById("userBox").innerHTML = `Usuário: ${user}`;
+document.getElementById("userBox").innerHTML = `Usuário: <b>${user}</b>`;
 
-// Limpar histórico apenas Rick
+// Botões de limpar histórico apenas Rick
 if(user!=="Rick"){
-  document.getElementById("clearHistBtn").style.display="none";
+  document.getElementById("clearHistBtnAdd").style.display="none";
+  document.getElementById("clearHistBtnRem").style.display="none";
 }
 
-/* 🔴 Tempo real */
+/* 🔴 TEMPO REAL + ALERTA IMEDIATO DE AÇÃO */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
-  if(snap.exists()){ data = snap.data().data || {}; renderStock(); }
-});
-onSnapshot(doc(db,"estoque","history"), snap=>{
-  if(snap.exists()){ history = snap.data().actions || []; renderHistory(); }
+  if(snap.exists()){ 
+    const oldData = JSON.stringify(data);
+    data = snap.data().data || {}; 
+    renderStock(); 
+    if(oldData !== JSON.stringify(data)){
+      showUpdateAlert("Estoque atualizado em outro dispositivo!");
+    }
+  }
 });
 
-// Salvar
+onSnapshot(doc(db,"estoque","history"), snap=>{
+  if(snap.exists()){ 
+    const oldHist = JSON.stringify(history);
+    history = snap.data() || {adicoes:[],remocoes:[]}; 
+    renderHistory(); 
+    if(oldHist !== JSON.stringify(history)){
+      showUpdateAlert("Histórico atualizado em outro dispositivo!");
+    }
+  }
+});
+
+function showUpdateAlert(msg){
+  updateBox.innerHTML = `<div class="update-alert" onclick="this.remove()">${msg}</div>`;
+  setTimeout(()=>updateBox.innerHTML="",5000);
+}
+
+// 🔄 Salvar
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
-  await setDoc(doc(db,"estoque","history"),{actions:history});
+  await setDoc(doc(db,"estoque","history"),history);
 }
 
-/* ➕ Adicionar produto */
+// ➕ Adicionar produto
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
   data[cat][newName.value]=parseInt(newQty.value)||0;
-  history.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
+  history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
   newCat.value=newName.value=newQty.value="";
   await save();
 };
 
-/* ➕➖ Alterar quantidade */
+// ➕➖ Alterar quantidade
 window.changeQty = async (cat,prod,delta)=>{
   data[cat][prod]+=delta;
   if(data[cat][prod]<0) data[cat][prod]=0;
   let msg = `${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
-  history.unshift(msg);
+  delta>0 ? history.adicoes.unshift(msg) : history.remocoes.unshift(msg);
   await save();
 };
 
-/* ✏️🗑️ Categoria/Produto */
+// ✏️🗑️ Categoria/Produto
 window.editCategory = async cat=>{
   let n = prompt("Novo nome da categoria:",cat);
   if(!n||n===cat) return;
@@ -148,7 +175,7 @@ window.deleteProduct = async (cat,prod)=>{
   delete data[cat][prod]; await save();
 };
 
-/* 🔍 Pesquisa com destaque */
+// 🔍 Pesquisa com destaque
 window.buscarProduto = ()=>{
   const termo = search.value.toLowerCase();
   if(lastFound) lastFound.classList.remove("highlight");
@@ -157,7 +184,7 @@ window.buscarProduto = ()=>{
   else alert("Produto não encontrado");
 };
 
-/* 🎨 Render estoque */
+// 🎨 Render estoque
 function renderStock(){
   stock.innerHTML=""; catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
@@ -186,27 +213,29 @@ function renderStock(){
   });
 }
 
-/* 🎨 Render histórico */
+// 🎨 Render histórico nas abas de adições/remissões
 function renderHistory(){
-  histActions.innerHTML = history.map(h=>`<div>${h}</div>`).join("");
+  histAdd.innerHTML = history.adicoes.map(h=>`<div>${h}</div>`).join("");
+  histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
 }
 
-/* 🔴 Limpar histórico */
-window.clearHistory = async ()=>{
+// 🔴 Limpar histórico
+window.clearHistory = async (tipo)=>{
   if(user!=="Rick") return;
   if(!confirm("Limpar histórico?")) return;
-  history=[];
+  if(tipo==="adicoes") history.adicoes=[];
+  if(tipo==="remocoes") history.remocoes=[];
   await save();
 };
 
-/* 🌙 Dark mode */
+// 🌙 Dark mode
 function toggleDarkMode(){
   document.body.classList.toggle("dark");
   localStorage.setItem("darkMode",document.body.classList.contains("dark"));
 }
 if(localStorage.getItem("darkMode")==="true") document.body.classList.add("dark");
 
-/* ⚡ Versão automática e alerta atualização */
+// ⚡ Versão automática
 function gerarVersao(){ const n=new Date(); return `${n.getFullYear()}.${n.getMonth()+1}.${n.getDate()}.${n.getHours()}.${n.getMinutes()}`; }
 function verificarAtualizacao(){
   const versaoAtual=gerarVersao();
@@ -226,7 +255,7 @@ function atualizarRodape(){
   footer.appendChild(btn);
 }
 
-load();
+// 🔴 Iniciar
 atualizarRodape();
 verificarAtualizacao();
 
