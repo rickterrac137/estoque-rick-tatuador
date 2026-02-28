@@ -50,13 +50,13 @@ button:active{transform:scale(0.95)}
 <div class="box">
 <h3>📜 Histórico de Adições</h3>
 <div id="histAdd"></div>
-<button id="clearHistBtnAdd" class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico</button>
+<button id="clearHistBtnAdd" class="clear-btn">Limpar Histórico</button>
 </div>
 
 <div class="box">
 <h3>📜 Histórico de Remoções</h3>
 <div id="histRem"></div>
-<button id="clearHistBtnRem" class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico</button>
+<button id="clearHistBtnRem" class="clear-btn">Limpar Histórico</button>
 </div>
 
 <div class="footer" id="footer"></div>
@@ -65,7 +65,7 @@ button:active{transform:scale(0.95)}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* Config Firebase */
+/* 🔥 Firebase config */
 const firebaseConfig = {
   apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
   authDomain: "estoque-rick-tatuador.firebaseapp.com",
@@ -88,45 +88,40 @@ const newName = document.getElementById("newName");
 const newQty = document.getElementById("newQty");
 const catSelect = document.getElementById("catSelect");
 const search = document.getElementById("search");
+const clearHistBtnAdd = document.getElementById("clearHistBtnAdd");
+const clearHistBtnRem = document.getElementById("clearHistBtnRem");
 
-/* Login obrigatório e persistente */
+/* Login obrigatório */
 let user = localStorage.getItem("usuarioLogado");
 while(!user){
   user = prompt("Digite seu nome de usuário:");
   if(user) localStorage.setItem("usuarioLogado", user);
 }
-document.getElementById("userBox").innerHTML = `Usuário: <b>${user}</b>`;
+document.getElementById("userBox").innerHTML = `Usuário logado: <b>${user}</b>`;
 
 /* Apenas Rick pode limpar histórico */
 if(user!=="Rick"){
-  document.getElementById("clearHistBtnAdd").style.display="none";
-  document.getElementById("clearHistBtnRem").style.display="none";
+  clearHistBtnAdd.style.display="none";
+  clearHistBtnRem.style.display="none";
+} else {
+  clearHistBtnAdd.onclick = ()=>clearHistory('adicoes');
+  clearHistBtnRem.onclick = ()=>clearHistory('remocoes');
 }
 
-/* 🔴 TEMPO REAL */
+/* Funções Firestore */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
   if(snap.exists()){ 
-    const oldData = JSON.stringify(data);
     data = snap.data().data || {}; 
-    renderStock(); 
-    if(oldData !== JSON.stringify(data)) showUpdateAlert("Estoque atualizado em outro dispositivo!");
+    renderStock();
   }
 });
 onSnapshot(doc(db,"estoque","history"), snap=>{
   if(snap.exists()){ 
-    const oldHist = JSON.stringify(history);
     history = snap.data() || {adicoes:[],remocoes:[]}; 
-    renderHistory(); 
-    if(oldHist !== JSON.stringify(history)) showUpdateAlert("Histórico atualizado em outro dispositivo!");
+    renderHistory();
   }
 });
 
-function showUpdateAlert(msg){
-  updateBox.innerHTML = `<div class="update-alert" onclick="this.remove()">${msg}</div>`;
-  setTimeout(()=>updateBox.innerHTML="",5000);
-}
-
-/* Salvar no Firestore */
 async function save(){
   await setDoc(doc(db,"estoque","principal"),{data});
   await setDoc(doc(db,"estoque","history"),history);
@@ -137,19 +132,21 @@ window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
-  data[cat][newName.value]=parseInt(newQty.value)||0;
+  data[cat][newName.value] = parseInt(newQty.value)||0;
   history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
-  newCat.value=newName.value=newQty.value="";
+  newCat.value = newName.value = newQty.value = "";
   await save();
+  renderStock(); renderHistory();
 };
 
 /* ➕➖ Alterar quantidade */
 window.changeQty = async (cat,prod,delta)=>{
-  data[cat][prod]+=delta;
+  data[cat][prod] = (data[cat][prod]||0)+delta;
   if(data[cat][prod]<0) data[cat][prod]=0;
   const msg = `${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
   delta>0 ? history.adicoes.unshift(msg) : history.remocoes.unshift(msg);
   await save();
+  renderStock(); renderHistory();
 };
 
 /* ✏️🗑️ Categoria/Produto */
@@ -157,21 +154,21 @@ window.editCategory = async cat=>{
   let n = prompt("Novo nome da categoria:",cat);
   if(!n||n===cat) return;
   data[n]=data[cat]; delete data[cat];
-  await save();
+  await save(); renderStock();
 };
 window.deleteCategory = async cat=>{
   if(!confirm("Excluir categoria?")) return;
-  delete data[cat]; await save();
+  delete data[cat]; await save(); renderStock();
 };
 window.editProduct = async (cat,prod)=>{
   let n = prompt("Novo nome do produto:",prod);
   if(!n||n===prod) return;
   data[cat][n]=data[cat][prod]; delete data[cat][prod];
-  await save();
+  await save(); renderStock();
 };
 window.deleteProduct = async (cat,prod)=>{
   if(!confirm("Excluir produto?")) return;
-  delete data[cat][prod]; await save();
+  delete data[cat][prod]; await save(); renderStock();
 };
 
 /* 🔍 Pesquisar */
@@ -219,13 +216,13 @@ function renderHistory(){
 }
 
 /* Limpar histórico */
-window.clearHistory = async (tipo)=>{
+async function clearHistory(tipo){
   if(user!=="Rick") return;
   if(!confirm("Limpar histórico?")) return;
   if(tipo==="adicoes") history.adicoes=[];
   if(tipo==="remocoes") history.remocoes=[];
-  await save();
-};
+  await save(); renderHistory();
+}
 
 /* 🌙 Dark mode */
 function toggleDarkMode(){
@@ -256,7 +253,6 @@ function atualizarRodape(){
 
 atualizarRodape();
 verificarAtualizacao();
-
 </script>
 </body>
 </html>
