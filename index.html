@@ -25,9 +25,6 @@ button:active{transform:scale(0.95)}
 .footer{text-align:center;margin-top:20px;font-size:14px;color:#555}
 .dark .footer{color:#aaa}
 .clear-btn{background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
-.userHistory{margin-bottom:15px;padding:8px;border-radius:6px;background:#f7f7f7}
-.dark .userHistory{background:#2a2a2a}
-.userHistory h4{margin:0 0 5px 0}
 </style>
 </head>
 
@@ -53,7 +50,7 @@ button:active{transform:scale(0.95)}
 <div id="stock"></div>
 
 <div class="box">
-<h3>📜 Histórico por Usuário</h3>
+<h3>📜 Histórico Geral</h3>
 <div id="historyBox"></div>
 <button id="clearBtn" class="clear-btn" onclick="clearHistory()">Limpar Histórico Geral</button>
 </div>
@@ -208,26 +205,13 @@ function renderStock(){
   });
 }
 
-/* 🎨 RENDER HISTÓRICO POR USUÁRIO */
+/* 🎨 RENDER HISTÓRICO GERAL */
 function renderHistory(){
   historyBox.innerHTML="";
-  let users = {};
-
   ['adicoes','remocoes'].forEach(type=>{
     history[type].forEach(entry=>{
-      let match = entry.match(/—\s*(.+)\s*—/);
-      let user = match?match[1]:'Desconhecido';
-      if(!users[user]) users[user]=[];
-      users[user].push(entry);
+      historyBox.innerHTML+=`<div>${entry}</div>`;
     });
-  });
-
-  Object.keys(users).forEach(u=>{
-    historyBox.innerHTML+=`<div class="userHistory"><h4>👤 ${u}</h4>`;
-    users[u].forEach(log=>{
-      historyBox.innerHTML+=`<div>${log}</div>`;
-    });
-    historyBox.innerHTML+="</div>";
   });
 }
 
