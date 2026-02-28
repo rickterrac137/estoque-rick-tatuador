@@ -73,6 +73,7 @@ const firebaseConfig = {
   messagingSenderId: "446550868475",
   appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -163,9 +164,64 @@ window.onload = async () => {
     });
   }
 
-  function renderHistory(){
-    histAdd.innerHTML = history.adicoes.map(h=>`<div>${h}</div>`).join("");
-    histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
+  function renderHistory() {
+    // Adições por usuário
+    const usersAdd = {};
+    history.adicoes.forEach(h => {
+      const match = h.match(/\((.*?)\)/); 
+      const userH = match ? match[1] : "Desconhecido";
+      const prodMatch = h.match(/➕ (.*?) \(/);
+      const prod = prodMatch ? prodMatch[1] : "";
+      let color = "";
+      for(const cat in data){
+        if(data[cat][prod]!==undefined){
+          if(data[cat][prod]===0) color="red";
+          else if(data[cat][prod]<5) color="orange";
+          break;
+        }
+      }
+      if(!usersAdd[userH]) usersAdd[userH] = [];
+      if(color) usersAdd[userH].push(`<span style="color:${color}">${h}</span>`);
+      else usersAdd[userH].push(h);
+    });
+
+    histAdd.innerHTML = "";
+    for (const u in usersAdd) {
+      const div = document.createElement("div");
+      div.style.borderBottom = "1px solid #ccc";
+      div.style.marginBottom = "6px";
+      div.innerHTML = `<b>${u}</b><br>${usersAdd[u].join("<br>")}`;
+      histAdd.appendChild(div);
+    }
+
+    // Remoções por usuário
+    const usersRem = {};
+    history.remocoes.forEach(h => {
+      const match = h.match(/\((.*?)\)/); 
+      const userH = match ? match[1] : "Desconhecido";
+      const prodMatch = h.match(/➖ (.*?) \(/);
+      const prod = prodMatch ? prodMatch[1] : "";
+      let color = "";
+      for(const cat in data){
+        if(data[cat][prod]!==undefined){
+          if(data[cat][prod]===0) color="red";
+          else if(data[cat][prod]<5) color="orange";
+          break;
+        }
+      }
+      if(!usersRem[userH]) usersRem[userH] = [];
+      if(color) usersRem[userH].push(`<span style="color:${color}">${h}</span>`);
+      else usersRem[userH].push(h);
+    });
+
+    histRem.innerHTML = "";
+    for (const u in usersRem) {
+      const div = document.createElement("div");
+      div.style.borderBottom = "1px solid #ccc";
+      div.style.marginBottom = "6px";
+      div.innerHTML = `<b>${u}</b><br>${usersRem[u].join("<br>")}`;
+      histRem.appendChild(div);
+    }
   }
 
   async function addProductFunc(){
