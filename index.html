@@ -50,9 +50,15 @@ button:active{transform:scale(0.95)}
 <div id="stock"></div>
 
 <div class="box">
-<h3>📜 Histórico Geral</h3>
-<div id="historyBox"></div>
-<button id="clearBtn" class="clear-btn" onclick="clearHistory()">Limpar Histórico Geral</button>
+<h3>📜 Histórico de Adições</h3>
+<div id="histAdd"></div>
+<button id="clearAddBtn" class="clear-btn" onclick="clearHistory('adicoes')">Limpar Histórico de Adições</button>
+</div>
+
+<div class="box">
+<h3>📜 Histórico de Remoções</h3>
+<div id="histRem"></div>
+<button id="clearRemBtn" class="clear-btn" onclick="clearHistory('remocoes')">Limpar Histórico de Remoções</button>
 </div>
 
 <div class="box">
@@ -92,7 +98,10 @@ if(!currentUser){
 }
 
 document.getElementById("userBox").innerHTML = `Usuário: ${currentUser}`;
-if(currentUser!=="Rick") document.getElementById("clearBtn").style.display="none";
+if(currentUser!=="Rick"){ 
+  document.getElementById("clearAddBtn").style.display="none";
+  document.getElementById("clearRemBtn").style.display="none";
+}
 
 /* 🔴 TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
@@ -205,21 +214,17 @@ function renderStock(){
   });
 }
 
-/* 🎨 RENDER HISTÓRICO GERAL */
+/* 🎨 RENDER HISTÓRICO */
 function renderHistory(){
-  historyBox.innerHTML="";
-  ['adicoes','remocoes'].forEach(type=>{
-    history[type].forEach(entry=>{
-      historyBox.innerHTML+=`<div>${entry}</div>`;
-    });
-  });
+  histAdd.innerHTML = history.adicoes.map(h=>`<div>${h}</div>`).join("");
+  histRem.innerHTML = history.remocoes.map(h=>`<div>${h}</div>`).join("");
 }
 
 /* 🔴 LIMPAR HISTÓRICO */
-window.clearHistory = async ()=>{
+window.clearHistory = async (type)=>{
   if(currentUser!=="Rick") return;
-  if(!confirm("Tem certeza que deseja limpar todo o histórico?")) return;
-  history = { adicoes: [], remocoes: [] };
+  if(!confirm("Tem certeza que deseja limpar o histórico?")) return;
+  history[type] = [];
   await save();
 };
 
@@ -238,5 +243,6 @@ async function loadVersion(){
 }
 loadVersion();
 </script>
+
 </body>
 </html>
