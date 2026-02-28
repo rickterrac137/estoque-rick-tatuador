@@ -86,6 +86,7 @@ let history = { adicoes: [], remocoes: [] };
 let currentUser = localStorage.getItem("usuarioLogado");
 let lastFound = null;
 
+// Login usuário
 if(!currentUser){
   let nome = prompt("Digite seu nome:");
   if(!nome) location.reload();
@@ -212,10 +213,8 @@ function renderHistory(){
   historyBox.innerHTML="";
   let users = {};
 
-  // agrupa histórico por usuário mantendo separação de adicoes/remocoes
   ['adicoes','remocoes'].forEach(type=>{
     history[type].forEach(entry=>{
-      // extrair nome do usuário
       let match = entry.match(/—\s*(.+)\s*—/);
       let user = match?match[1]:'Desconhecido';
       if(!users[user]) users[user]=[];
