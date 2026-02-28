@@ -10,38 +10,32 @@
 
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px;transition:0.3s}
-.dark{background:#121212;color:#fff}
+.dark{background:#121212;color:white}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 .dark .box{background:#1e1e1e}
 input,select,button{width:100%;padding:8px;margin:4px 0}
+button{cursor:pointer;transition:0.2s}
+button:active{transform:scale(0.95)}
 .item{display:flex;justify-content:space-between;align-items:center}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
 .low{color:orange;font-weight:bold}
 .highlight{background:#ffff99;border-radius:4px}
-.footer{margin-top:20px;text-align:center;font-size:14px}
+.footer{text-align:center;margin-top:20px;font-size:14px;color:#555}
+.dark .footer{color:#aaa}
 .clear-btn{background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
+.userHistory{margin-bottom:15px;padding:8px;border-radius:6px;background:#f7f7f7}
+.dark .userHistory{background:#2a2a2a}
+.userHistory h4{margin:0 0 5px 0}
 </style>
 </head>
 
 <body>
 
-<script>
-let currentUser = localStorage.getItem("usuarioLogado");
-if(!currentUser){
-  let nome = prompt("Digite seu nome para entrar:");
-  if(nome){
-    localStorage.setItem("usuarioLogado", nome);
-    currentUser = nome;
-  }else{
-    alert("Nome obrigatório.");
-    location.reload();
-  }
-}
-</script>
-
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
+
+<div id="userBox" class="box"></div>
 
 <div class="box">
 <input id="search" placeholder="🔍 Pesquisar produto">
@@ -88,58 +82,64 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let data = {};
-let history = [];
+let history = {};
+let currentUser = localStorage.getItem("usuarioLogado");
+let lastFound = null;
 
+if(!currentUser){
+  let nome = prompt("Digite seu nome:");
+  if(!nome) location.reload();
+  localStorage.setItem("usuarioLogado", nome);
+  currentUser = nome;
+}
+
+document.getElementById("userBox").innerHTML = `Usuário: ${currentUser}`;
+if(currentUser!=="Rick") document.getElementById("clearBtn").style.display="none";
+
+/* 🔴 TEMPO REAL */
 onSnapshot(doc(db,"estoque","principal"), snap=>{
   if(snap.exists()) data = snap.data().data || {};
-  render();
+  renderStock();
 });
 
 onSnapshot(doc(db,"estoque","history"), snap=>{
-  if(snap.exists()) history = snap.data().logs || [];
+  if(snap.exists()) history = snap.data() || {};
   renderHistory();
 });
 
 async function save(){
-  await setDoc(doc(db,"estoque","principal"),{data});
-  await setDoc(doc(db,"estoque","history"),{logs:history});
+  await setDoc(doc(db,"estoque","principal"), {data});
+  await setDoc(doc(db,"estoque","history"), history);
 }
 
+/* ➕➖ ADICIONAR/REMOVER */
 window.addProduct = async ()=>{
   let cat = newCat.value || catSelect.value;
   if(!cat || !newName.value) return alert("Preencha tudo");
   if(!data[cat]) data[cat]={};
-
   data[cat][newName.value] = parseInt(newQty.value)||0;
 
-  history.unshift({
-    user: currentUser,
-    action: "➕",
-    product: newName.value,
-    date: new Date().toLocaleString()
-  });
+  if(!history[currentUser]) history[currentUser]=[];
+  history[currentUser].unshift(`➕ ${newName.value} — ${new Date().toLocaleString()}`);
 
   newCat.value=newName.value=newQty.value="";
   await save();
 };
 
-window.changeQty = async (cat, prod, delta)=>{
+window.changeQty = async (cat,prod,delta)=>{
   data[cat][prod]+=delta;
   if(data[cat][prod]<0) data[cat][prod]=0;
 
-  history.unshift({
-    user: currentUser,
-    action: delta>0?"➕":"➖",
-    product: prod,
-    date: new Date().toLocaleString()
-  });
+  if(!history[currentUser]) history[currentUser]=[];
+  history[currentUser].unshift(`${delta>0?'➕':'➖'} ${prod} — ${new Date().toLocaleString()}`);
 
   await save();
 };
 
+/* ✏️🗑️ CATEGORIA / PRODUTO */
 window.editCategory = async (cat)=>{
-  let n = prompt("Novo nome da categoria:",cat);
-  if(!n||n===cat) return;
+  let n = prompt("Novo nome da categoria:", cat);
+  if(!n || n===cat) return;
   data[n]=data[cat]; delete data[cat];
   await save();
 };
@@ -151,8 +151,8 @@ window.deleteCategory = async (cat)=>{
 };
 
 window.editProduct = async (cat,prod)=>{
-  let n = prompt("Novo nome do produto:",prod);
-  if(!n||n===prod) return;
+  let n = prompt("Novo nome do produto:", prod);
+  if(!n || n===prod) return;
   data[cat][n]=data[cat][prod]; delete data[cat][prod];
   await save();
 };
@@ -163,21 +163,37 @@ window.deleteProduct = async (cat,prod)=>{
   await save();
 };
 
-function render(){
+/* 🔍 PESQUISA */
+window.buscarProduto = ()=>{
+  const termo = search.value.toLowerCase();
+  if(lastFound) lastFound.classList.remove("highlight");
+
+  const el = Array.from(document.querySelectorAll('[data-prod]'))
+    .find(d=>d.dataset.prod.includes(termo));
+
+  if(el){
+    el.scrollIntoView({behavior:"smooth", block:"center"});
+    el.classList.add("highlight");
+    lastFound = el;
+  }else alert("Produto não encontrado");
+};
+
+/* 🎨 RENDER ESTOQUE */
+function renderStock(){
   stock.innerHTML=""; catSelect.innerHTML="";
   Object.keys(data).forEach(cat=>{
     catSelect.innerHTML+=`<option>${cat}</option>`;
-    let b=document.createElement("div");
-    b.className="box";
-    b.innerHTML=`<h3>${cat}
+    let box = document.createElement("div");
+    box.className="box";
+    box.innerHTML=`<h3>${cat}
       <button onclick="editCategory('${cat}')">✏️</button>
       <button onclick="deleteCategory('${cat}')">🗑️</button>
     </h3>`;
     Object.keys(data[cat]).forEach(p=>{
-      let q=data[cat][p];
-      let cls=q===0?"zero":q<5?"low":"";
-      b.innerHTML+=`
-      <div class="item">
+      let q = data[cat][p];
+      let cls = q===0?"zero":q<5?"low":"";
+      box.innerHTML+=`
+      <div class="item" data-prod="${p.toLowerCase()}">
         <span class="${cls}">${p}: ${q}</span>
         <span class="controls">
           <button onclick="changeQty('${cat}','${p}',-1)">−</button>
@@ -187,54 +203,43 @@ function render(){
         </span>
       </div>`;
     });
-    stock.appendChild(b);
+    stock.appendChild(box);
   });
 }
 
+/* 🎨 RENDER HISTÓRICO POR USUÁRIO */
 function renderHistory(){
   historyBox.innerHTML="";
-  let grouped={};
-  history.forEach(log=>{
-    if(!grouped[log.user]) grouped[log.user]=[];
-    grouped[log.user].push(log);
-  });
-
-  Object.keys(grouped).forEach(user=>{
-    historyBox.innerHTML+=`<h4>👤 ${user}</h4>`;
-    grouped[user].forEach(log=>{
-      historyBox.innerHTML+=`
-        <div>${log.action} ${log.product} — ${log.date}</div>`;
+  Object.keys(history).forEach(u=>{
+    historyBox.innerHTML+=`<div class="userHistory"><h4>👤 ${u}</h4>`;
+    history[u].forEach(log=>{
+      historyBox.innerHTML+=`<div>${log}</div>`;
     });
+    historyBox.innerHTML+="</div>";
   });
-
-  if(currentUser!=="Rick"){
-    document.getElementById("clearBtn").style.display="none";
-  }
 }
 
+/* 🔴 LIMPAR HISTÓRICO */
 window.clearHistory = async ()=>{
   if(currentUser!=="Rick") return;
   if(!confirm("Tem certeza que deseja limpar todo o histórico?")) return;
-  history=[];
+  history={};
   await save();
 };
 
-window.toggleDarkMode=()=>{
+/* 🌙 MODO ESCURO */
+window.toggleDarkMode = ()=>{
   document.body.classList.toggle("dark");
-  localStorage.setItem("darkMode",
-    document.body.classList.contains("dark"));
+  localStorage.setItem("darkMode", document.body.classList.contains("dark"));
 };
 
-if(localStorage.getItem("darkMode")==="true"){
-  document.body.classList.add("dark");
-}
+if(localStorage.getItem("darkMode")==="true") document.body.classList.add("dark");
 
+/* ⚡ VERSÃO AUTOMÁTICA */
 async function loadVersion(){
-  const vDoc=await getDoc(doc(db,"config","version"));
-  let version=vDoc.exists()?vDoc.data().version:"Auto";
-  footer.innerHTML=`Versão do App: ${version}<br>
-  Atualizado em: ${new Date().toLocaleString()}<br>
-  Criado por Denis Costa`;
+  const vDoc = await getDoc(doc(db,"config","version"));
+  let version = vDoc.exists()?vDoc.data().version:"2.0.1";
+  footer.innerHTML = `Versão do App: ${version}<br>Atualizado em: ${new Date().toLocaleString()}<br>Criado por Denis Costa`;
 }
 loadVersion();
 </script>
