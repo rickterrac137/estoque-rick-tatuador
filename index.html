@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESTOQUE DO ESTÚDIO RICK TATUADOR</title>
-
 <style>
 body{font-family:Arial;background:#f2f2f2;margin:0;padding:10px;transition:0.3s}
 h1{text-align:center}
 .box{background:#fff;padding:10px;margin-bottom:10px;border-radius:8px}
 input,select,button{width:100%;padding:8px;margin:4px 0}
+button{cursor:pointer;transition:0.2s}
+button:active{transform:scale(0.95)}
 .item{display:flex;justify-content:space-between;align-items:center}
 .controls button{width:auto;margin-left:4px}
 .zero{color:red;font-weight:bold}
@@ -17,46 +18,23 @@ input,select,button{width:100%;padding:8px;margin:4px 0}
 .highlight{background:#ffff99;border-radius:4px}
 .footer{margin-top:20px;text-align:center;color:#555;font-size:14px}
 .clear-btn{margin-top:4px;background:#f44336;color:white;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
+.clear-btn:hover{opacity:0.8}
 .dark{background:#121212;color:#f2f2f2}
 .dark .box{background:#1e1e1e}
-.dark input,.dark select,.dark button{
-background:#2a2a2a;color:white;border:1px solid #444
-}
-
-.modal{
-display:none;
-position:fixed;
-top:0;left:0;
-width:100%;height:100%;
-background:#000000cc;
-z-index:9999;
-}
-.modal-content{
-background:#fff;
-margin:20px;
-padding:15px;
-border-radius:10px;
-}
+.dark input,.dark select,.dark button{background:#2a2a2a;color:white;border:1px solid #444}
+.update-alert{background:#ff9800;color:#000;padding:8px;border-radius:6px;margin-bottom:10px;cursor:pointer;font-weight:bold}
 </style>
 </head>
-
 <body>
 
-<script>
-let user = localStorage.getItem("usuarioLogado");
-while(!user){
-  user = prompt("Digite seu nome:");
-  if(user) localStorage.setItem("usuarioLogado", user);
-}
-</script>
+<div id="userBox" class="box"></div>
+<div id="updateBox"></div>
 
 <h1>ESTOQUE DO ESTÚDIO RICK TATUADOR</h1>
 
-<button onclick="abrirDecalque()">🖋️ Gerador de Decalque</button>
-
 <div class="box">
 <input id="search" placeholder="🔍 Pesquisar produto">
-<button onclick="buscarProduto()">Pesquisar</button>
+<button id="btnSearch">Pesquisar</button>
 </div>
 
 <div class="box">
@@ -64,7 +42,7 @@ while(!user){
 <input id="newCat" placeholder="Ou nova categoria">
 <input id="newName" placeholder="Produto">
 <input id="newQty" type="number" placeholder="Quantidade">
-<button onclick="addProduct()">Adicionar</button>
+<button id="btnAdd">Adicionar</button>
 </div>
 
 <div id="stock"></div>
@@ -72,42 +50,28 @@ while(!user){
 <div class="box">
 <h3>📜 Histórico de Adições</h3>
 <div id="histAdd"></div>
+<button id="clearHistBtnAdd" class="clear-btn">Limpar Histórico</button>
 </div>
 
 <div class="box">
 <h3>📜 Histórico de Remoções</h3>
 <div id="histRem"></div>
+<button id="clearHistBtnRem" class="clear-btn">Limpar Histórico</button>
 </div>
 
-<!-- MODAL IA -->
-<div id="modal" class="modal">
-<div class="modal-content">
-
-<button onclick="fecharDecalque()">Fechar</button>
-
-<h2>Gerador de Decalque</h2>
-
-<input type="file" id="upload">
-<button onclick="gerar()">Gerar</button>
-
-<img id="resultado" style="width:100%;margin-top:10px">
-
-<button onclick="baixar()">Baixar</button>
-
-<div id="status"></div>
-
-</div>
-</div>
+<div class="footer" id="footer"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "SUA_KEY",
-  authDomain: "SEU_DOMINIO",
-  projectId: "SEU_ID"
+  apiKey: "AIzaSyBPF8DpKpIHpYsdTRNCgHgiwCqUcosLX6c",
+  authDomain: "estoque-rick-tatuador.firebaseapp.com",
+  projectId: "estoque-rick-tatuador",
+  storageBucket: "estoque-rick-tatuador.firebasestorage.app",
+  messagingSenderId: "446550868475",
+  appId: "1:446550868475:web:2a2ba89ccc5a076fcacb5e"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -117,152 +81,238 @@ let data = {};
 let history = { adicoes: [], remocoes: [] };
 let lastFound = null;
 
-onSnapshot(doc(db,"estoque","principal"), snap=>{
-  if(snap.exists()){ data = snap.data().data || {}; render(); }
-});
-onSnapshot(doc(db,"estoque","history"), snap=>{
-  if(snap.exists()){ history = snap.data(); renderHistory(); }
-});
+window.onload = async () => {
+  const newCat = document.getElementById("newCat");
+  const newName = document.getElementById("newName");
+  const newQty = document.getElementById("newQty");
+  const catSelect = document.getElementById("catSelect");
+  const search = document.getElementById("search");
+  const clearHistBtnAdd = document.getElementById("clearHistBtnAdd");
+  const clearHistBtnRem = document.getElementById("clearHistBtnRem");
+  const btnAdd = document.getElementById("btnAdd");
+  const btnSearch = document.getElementById("btnSearch");
 
-async function save(){
-  await setDoc(doc(db,"estoque","principal"),{data});
-  await setDoc(doc(db,"estoque","history"),history);
-}
+  // Login obrigatório
+  let user = localStorage.getItem("usuarioLogado");
+  while(!user){
+    user = prompt("Digite seu nome de usuário:");
+    if(user) localStorage.setItem("usuarioLogado", user);
+  }
+  document.getElementById("userBox").innerHTML = `Usuário logado: <b>${user}</b>`;
 
-window.addProduct = async ()=>{
-  let cat = newCat.value || catSelect.value;
-  if(!cat || !newName.value) return alert("Preencha tudo");
-  if(!data[cat]) data[cat]={};
-  data[cat][newName.value]=parseInt(newQty.value)||0;
-  history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
-  newCat.value=newName.value=newQty.value="";
-  await save();
-};
+  // Limpar histórico apenas Rick
+  if(user!=="Rick"){
+    clearHistBtnAdd.style.display="none";
+    clearHistBtnRem.style.display="none";
+  }
 
-window.changeQty = async (cat,prod,delta)=>{
-  data[cat][prod]+=delta;
-  if(data[cat][prod]<0) data[cat][prod]=0;
-  const msg=`${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
-  delta>0?history.adicoes.unshift(msg):history.remocoes.unshift(msg);
-  await save();
-};
+  // Firestore tempo real
+  onSnapshot(doc(db,"estoque","principal"), snap=>{
+    if(snap.exists()){ 
+      data = snap.data().data || {}; 
+      renderStock();
+    }
+  });
+  onSnapshot(doc(db,"estoque","history"), snap=>{
+    if(snap.exists()){ 
+      history = snap.data() || {adicoes:[],remocoes:[]}; 
+      renderHistory();
+    }
+  });
 
-window.buscarProduto = ()=>{
-  const termo=search.value.toLowerCase();
-  if(lastFound) lastFound.classList.remove("highlight");
-  const el=[...document.querySelectorAll('[data-prod]')]
-  .find(d=>d.dataset.prod.includes(termo));
-  if(el){
-    el.scrollIntoView({behavior:"smooth",block:"center"});
-    el.classList.add("highlight"); lastFound=el;
-  }else alert("Produto não encontrado");
-};
+  async function save(){
+    await setDoc(doc(db,"estoque","principal"),{data});
+    await setDoc(doc(db,"estoque","history"),history);
+  }
 
-function render(){
-  stock.innerHTML=""; catSelect.innerHTML="";
-  Object.keys(data).forEach(cat=>{
-    catSelect.innerHTML+=`<option>${cat}</option>`;
-    let b=document.createElement("div");
-    b.className="box";
-    b.innerHTML=`<h3>${cat}</h3>`;
-    Object.keys(data[cat]).forEach(p=>{
-      let q=data[cat][p];
-      let cls=q===0?"zero":q<5?"low":"";
-      b.innerHTML+=`
-      <div class="item" data-prod="${p.toLowerCase()}">
-      <span class="${cls}">${p}: ${q}</span>
-      <span class="controls">
-      <button onclick="changeQty('${cat}','${p}',-1)">−</button>
-      <button onclick="changeQty('${cat}','${p}',1)">+</button>
-      </span></div>`;
+  function renderStock(){
+    stock.innerHTML=""; catSelect.innerHTML="";
+    Object.keys(data).forEach(cat=>{
+      catSelect.innerHTML+=`<option>${cat}</option>`;
+      let box=document.createElement("div");
+      box.className="box";
+      box.innerHTML=`<h3>${cat}
+        <button class="editCat">✏️</button>
+        <button class="delCat">🗑️</button>
+      </h3>`;
+      Object.keys(data[cat]).forEach(p=>{
+        let q=data[cat][p];
+        let cls=q===0?"zero":q<5?"low":"";
+        const div = document.createElement("div");
+        div.className="item";
+        div.dataset.prod = p.toLowerCase();
+        div.innerHTML = `<span class="${cls}">${p}: ${q}</span>
+        <span class="controls">
+          <button class="minusBtn">−</button>
+          <button class="plusBtn">+</button>
+          <button class="editProd">✏️</button>
+          <button class="delProd">🗑️</button>
+        </span>`;
+        box.appendChild(div);
+
+        // Listeners dos botões do produto
+        div.querySelector(".minusBtn").addEventListener("click", ()=>changeQty(cat,p,-1));
+        div.querySelector(".plusBtn").addEventListener("click", ()=>changeQty(cat,p,1));
+        div.querySelector(".editProd").addEventListener("click", ()=>editProduct(cat,p));
+        div.querySelector(".delProd").addEventListener("click", ()=>deleteProduct(cat,p));
+      });
+      stock.appendChild(box);
+
+      // Listeners categoria
+      box.querySelector(".editCat").addEventListener("click", ()=>editCategory(cat));
+      box.querySelector(".delCat").addEventListener("click", ()=>deleteCategory(cat));
     });
-    stock.appendChild(b);
-  });
-}
+  }
 
-function renderHistory(){
-  histAdd.innerHTML=history.adicoes.map(h=>`<div>${h}</div>`).join("");
-  histRem.innerHTML=history.remocoes.map(h=>`<div>${h}</div>`).join("");
-}
-
-/* IA */
-
-const TOKEN = "r8_XJp1c28FjvR7QFNNysQdv66lkKCmDHF3uYT6g";
-
-window.abrirDecalque = ()=> modal.style.display="block";
-window.fecharDecalque = ()=> modal.style.display="none";
-
-function toBase64(file){
-  return new Promise(resolve=>{
-    const reader=new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload=()=>resolve(reader.result);
-  });
-}
-
-window.gerar = async ()=>{
-  const file = upload.files[0];
-  if(!file) return alert("Escolha uma imagem");
-
-  status.innerText="Processando...";
-
-  try{
-    const base64 = await toBase64(file);
-
-    const response = await fetch("https://api.replicate.com/v1/predictions",{
-      method:"POST",
-      headers:{
-        "Authorization":"Token "+TOKEN,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({
-        version:"stability-ai/sdxl",
-        input:{
-          image:base64,
-          prompt:"tattoo stencil, black lines"
+  function renderHistory() {
+    // Adições por usuário
+    const usersAdd = {};
+    history.adicoes.forEach(h => {
+      const match = h.match(/\((.*?)\)/); 
+      const userH = match ? match[1] : "Desconhecido";
+      const prodMatch = h.match(/➕ (.*?) \(/);
+      const prod = prodMatch ? prodMatch[1] : "";
+      let color = "";
+      for(const cat in data){
+        if(data[cat][prod]!==undefined){
+          if(data[cat][prod]===0) color="red";
+          else if(data[cat][prod]<5) color="orange";
+          break;
         }
-      })
+      }
+      if(!usersAdd[userH]) usersAdd[userH] = [];
+      if(color) usersAdd[userH].push(`<span style="color:${color}">${h}</span>`);
+      else usersAdd[userH].push(h);
     });
 
-    const data = await response.json();
-    verificar(data.id);
+    histAdd.innerHTML = "";
+    for (const u in usersAdd) {
+      const div = document.createElement("div");
+      div.style.borderBottom = "1px solid #ccc";
+      div.style.marginBottom = "6px";
+      div.innerHTML = `<b>${u}</b><br>${usersAdd[u].join("<br>")}`;
+      histAdd.appendChild(div);
+    }
 
-  }catch(e){
-    status.innerText="Erro";
-  }
-};
-
-async function verificar(id){
-  let pronto=false;
-  while(!pronto){
-    const res = await fetch(`https://api.replicate.com/v1/predictions/${id}`,{
-      headers:{ "Authorization":"Token "+TOKEN }
+    // Remoções por usuário
+    const usersRem = {};
+    history.remocoes.forEach(h => {
+      const match = h.match(/\((.*?)\)/); 
+      const userH = match ? match[1] : "Desconhecido";
+      const prodMatch = h.match(/➖ (.*?) \(/);
+      const prod = prodMatch ? prodMatch[1] : "";
+      let color = "";
+      for(const cat in data){
+        if(data[cat][prod]!==undefined){
+          if(data[cat][prod]===0) color="red";
+          else if(data[cat][prod]<5) color="orange";
+          break;
+        }
+      }
+      if(!usersRem[userH]) usersRem[userH] = [];
+      if(color) usersRem[userH].push(`<span style="color:${color}">${h}</span>`);
+      else usersRem[userH].push(h);
     });
-    const data = await res.json();
 
-    if(data.status==="succeeded"){
-      resultado.src=data.output[0];
-      status.innerText="Pronto!";
-      pronto=true;
+    histRem.innerHTML = "";
+    for (const u in usersRem) {
+      const div = document.createElement("div");
+      div.style.borderBottom = "1px solid #ccc";
+      div.style.marginBottom = "6px";
+      div.innerHTML = `<b>${u}</b><br>${usersRem[u].join("<br>")}`;
+      histRem.appendChild(div);
     }
-
-    if(data.status==="failed"){
-      status.innerText="Erro";
-      break;
-    }
-
-    await new Promise(r=>setTimeout(r,2000));
   }
-}
 
-window.baixar = ()=>{
-  if(!resultado.src) return alert("Nada gerado");
-  const a=document.createElement("a");
-  a.href=resultado.src;
-  a.download="decalque.png";
-  a.click();
+  async function addProductFunc(){
+    let cat = newCat.value || catSelect.value;
+    if(!cat || !newName.value) return alert("Preencha tudo");
+    if(!data[cat]) data[cat]={};
+    data[cat][newName.value] = parseInt(newQty.value)||0;
+    history.adicoes.unshift(`➕ ${newName.value} (${user}) - ${new Date().toLocaleString()}`);
+    newCat.value = newName.value = newQty.value = "";
+    await save(); renderStock(); renderHistory();
+  }
+
+  async function changeQty(cat,prod,delta){
+    data[cat][prod] = (data[cat][prod]||0)+delta;
+    if(data[cat][prod]<0) data[cat][prod]=0;
+    const msg = `${delta>0?'➕':'➖'} ${prod} (${user}) - ${new Date().toLocaleString()}`;
+    delta>0 ? history.adicoes.unshift(msg) : history.remocoes.unshift(msg);
+    await save(); renderStock(); renderHistory();
+  }
+
+  async function clearHistoryFunc(tipo){
+    if(user!=="Rick") return;
+    if(!confirm("Limpar histórico?")) return;
+    if(tipo==="adicoes") history.adicoes=[];
+    if(tipo==="remocoes") history.remocoes=[];
+    await save(); renderHistory();
+  }
+
+  btnAdd.addEventListener("click", addProductFunc);
+  btnSearch.addEventListener("click", ()=>{
+    const termo = search.value.toLowerCase();
+    if(lastFound) lastFound.classList.remove("highlight");
+    const el = [...document.querySelectorAll('[data-prod]')].find(d=>d.dataset.prod.includes(termo));
+    if(el){ el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.add("highlight"); lastFound=el; }
+    else alert("Produto não encontrado");
+  });
+
+  clearHistBtnAdd.addEventListener("click", ()=>clearHistoryFunc("adicoes"));
+  clearHistBtnRem.addEventListener("click", ()=>clearHistoryFunc("remocoes"));
+
+  // Edit/Delete Categoria/Produto globais
+  window.editCategory = async cat=>{
+    let n = prompt("Novo nome da categoria:",cat);
+    if(!n||n===cat) return;
+    data[n]=data[cat]; delete data[cat]; await save(); renderStock();
+  };
+  window.deleteCategory = async cat=>{
+    if(!confirm("Excluir categoria?")) return;
+    delete data[cat]; await save(); renderStock();
+  };
+  window.editProduct = async (cat,prod)=>{
+    let n = prompt("Novo nome do produto:",prod);
+    if(!n||n===prod) return;
+    data[cat][n]=data[cat][prod]; delete data[cat][prod]; await save(); renderStock();
+  };
+  window.deleteProduct = async (cat,prod)=>{
+    if(!confirm("Excluir produto?")) return;
+    delete data[cat][prod]; await save(); renderStock();
+  };
+
+  // Dark Mode
+  function toggleDarkMode(){
+    document.body.classList.toggle("dark");
+    localStorage.setItem("darkMode",document.body.classList.contains("dark"));
+  }
+  if(localStorage.getItem("darkMode")==="true") document.body.classList.add("dark");
+
+  // Versão automática
+  function gerarVersao(){ const n=new Date(); return `${n.getFullYear()}.${n.getMonth()+1}.${n.getDate()}.${n.getHours()}.${n.getMinutes()}`; }
+  function verificarAtualizacao(){
+    const versaoAtual=gerarVersao();
+    const versaoSalva=localStorage.getItem("versaoApp");
+    if(versaoSalva && versaoSalva!==versaoAtual){
+      updateBox.innerHTML=`<div class="update-alert" onclick="location.reload()">Nova versão disponível. Clique para atualizar.</div>`;
+    }
+    localStorage.setItem("versaoApp",versaoAtual);
+  }
+
+  function atualizarRodape(){
+    footer.innerHTML=`Última atualização: ${new Date().toLocaleString()}<br>
+    Versão: ${gerarVersao()}<br>
+    Criado por Denis Costa<br>`;
+    const btn=document.createElement("button");
+    btn.innerText="🌙 Modo Escuro";
+    btn.onclick=toggleDarkMode;
+    footer.appendChild(btn);
+  }
+
+  atualizarRodape();
+  verificarAtualizacao();
 };
 </script>
-
 </body>
 </html>
